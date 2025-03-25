@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import bg from "../assets/bg-image.png";
-import { registerVoter, logoutVoter } from "../../authentication/firebase";
+import { registerVoter, logoutVoter, checkEmailAvailability } from "../../authentication/firebase";
 
 export default function Registration() {
   const [formData, setFormData] = useState({ 
@@ -17,7 +17,49 @@ export default function Registration() {
   const [consentToTerms, setConsentToTerms] = useState(false);
   const [captcha, setCaptcha] = useState({ question: "", answer: 0 });
   const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const [emailStatus, setEmailStatus] = useState({ checking: false, available: true, message: "" });
   const navigate = useNavigate();
+
+  // Debounced email check
+  const debouncedEmailCheck = useCallback(
+    async (email) => {
+      if (!email || !email.includes('@')) {
+        setEmailStatus({ checking: false, available: true, message: "" });
+        return;
+      }
+
+      setEmailStatus(prev => ({ ...prev, checking: true }));
+      const isAvailable = await checkEmailAvailability(email);
+      
+      if (isAvailable === null) {
+        setEmailStatus({ 
+          checking: false, 
+          available: true, 
+          message: "" 
+        });
+      } else {
+        setEmailStatus({
+          checking: false,
+          available: isAvailable,
+          message: isAvailable ? 
+            "✓ Email is available" : 
+            "✗ This email is already registered"
+        });
+      }
+    },
+    []
+  );
+
+  // Handle email change with debouncing
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (formData.email) {
+        debouncedEmailCheck(formData.email);
+      }
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timeoutId);
+  }, [formData.email, debouncedEmailCheck]);
 
   // Generate simple math captcha on component mount
   useEffect(() => {
@@ -171,9 +213,23 @@ export default function Registration() {
             placeholder="Enter your email address"
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            className="w-full p-2 border rounded mt-1"
+            className={`w-full p-2 border rounded mt-1 ${
+              emailStatus.message ? 
+                emailStatus.available ? 'border-green-500' : 'border-red-500' 
+                : ''
+            }`}
           />
-          <p className="text-sm text-gray-600 mt-1">We'll send a verification email to this address</p>
+          {emailStatus.checking ? (
+            <p className="text-sm text-gray-600 mt-1">Checking email availability...</p>
+          ) : emailStatus.message ? (
+            <p className={`text-sm mt-1 ${
+              emailStatus.available ? 'text-green-600' : 'text-red-600'
+            }`}>
+              {emailStatus.message}
+            </p>
+          ) : (
+            <p className="text-sm text-gray-600 mt-1">We'll send a verification email to this address</p>
+          )}
         </div>
         
         <div className="mt-4">

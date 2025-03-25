@@ -160,5 +160,21 @@ const generateVoterKey = () => {
   return key;
 };
 
+// Check if email is already registered
+export const checkEmailAvailability = async (email) => {
+  try {
+    if (!email || !email.includes('@')) return null;
+    
+    const votersRef = collection(db, 'voters');
+    const q = query(votersRef, where("email", "==", email));
+    const querySnapshot = await getDocs(q);
+    
+    return querySnapshot.empty;
+  } catch (error) {
+    console.error("Error checking email:", error);
+    return null;
+  }
+};
+
 // Export the auth and db objects for direct access
 export { auth, db, sendEmailVerification };
