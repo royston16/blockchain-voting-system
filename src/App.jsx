@@ -5,9 +5,27 @@ import Registration from './components/Registration'
 import Login from './components/Login'
 import VotingDashboard from './components/VotingDashboard'
 import Results from './components/Results'
+import BlockchainVerify from './components/BlockchainVerify'
 import { checkAuthState, logoutVoter } from '../authentication/firebase'
 
+import Block from './chain/Blockchain'
+import BlockchainInfo from './components/BlockchainInfo'
+
+// initialize the block chain on load
+// check to see if previous blocks/votes exist
+if (true) 
+{
+  window.allBlocks = [];
+}
+else
+{
+  // load from the file all current votes
+}
+window.firstBlockPreviousHash = "9ab0a3600a1eba7002afccb2931ba5e7";
+window.firstBlockHash = "9ab0a3600a1eba7002afccb2931ba5e7";
+                      
 function App() {
+
   const [user, setUser] = useState(null)
   const [votes, setVotes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -79,7 +97,16 @@ function App() {
               </ProtectedRoute>
             } 
           />
+          <Route 
+            path="/chain" 
+            element={
+              <ProtectedRoute>
+                <BlockchainVerify votes={votes} />
+              </ProtectedRoute>
+            } 
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
+          
         </Routes>
       </div>
     </Router>

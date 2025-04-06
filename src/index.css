@@ -195,6 +195,18 @@ h3 {
   text-align: center;
 }
 
+.voting-popup {
+  width: 500px;
+  margin: auto;
+
+  margin-top: 10px;
+  text-align: center;
+  color: red;
+  border: 1px solid grey;
+  border-radius: 20px;
+  box-shadow: 1px 1px 1px 1px;
+}
+
 .transaction-info {
   margin-top: 30px;
   padding: 20px;
@@ -296,4 +308,29 @@ h3 {
   padding: 40px;
   color: #666;
   font-size: 16px;
+}
+
+.hrDivider {
+  border: 0;
+  height: 5px;
+  background-color: grey;
+  margin: auto;
+  border-radius: 10px;
+  width: 80%;
+}
+
+.blockHashInfo {
+  display: block;
+  margin: auto;
+  text-align: center;
+}
+
+.blockLi {
+  margin-bottom: 5px;
+}
+
+.numBlocksSpan {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 50px;
 }

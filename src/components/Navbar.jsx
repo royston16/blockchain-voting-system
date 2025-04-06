@@ -42,6 +42,13 @@ export default function Navbar({ user, setUser }) {
             >
               Results
             </Link>
+
+            <Link 
+              to="/chain" 
+              className="text-indigo-600 hover:text-indigo-800"
+            >
+              Blockchain Verification
+            </Link>
             
             <button 
               onClick={handleLogout}

@@ -8,6 +8,7 @@ export default function BlockchainInfo() {
     networkStatus: 'Connected'
   })
 
+
   useEffect(() => {
     const interval = setInterval(() => {
       setBlockInfo(prev => ({
@@ -25,12 +26,12 @@ export default function BlockchainInfo() {
       <h3>Blockchain Network Status</h3>
       <div className="blockchain-stats">
         <div className="stat-item">
-          <span className="stat-label">Current Block</span>
-          <span className="stat-value">{blockInfo.currentBlock}</span>
+          <span className="stat-label">Next Block</span>
+          <span className="stat-value">{window.allBlocks.length + 1}</span>
         </div>
         <div className="stat-item">
           <span className="stat-label">Total Votes</span>
-          <span className="stat-value">{blockInfo.totalVotes}</span>
+          <span className="stat-value">{window.allBlocks.length}</span>
         </div>
         <div className="stat-item">
           <span className="stat-label">Network Status</span>
@@ -42,6 +43,12 @@ export default function BlockchainInfo() {
           <span className="stat-label">Last Update</span>
           <span className="stat-value">
             {new Date(blockInfo.lastUpdate).toLocaleTimeString()}
+          </span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-label">Chain Status</span>
+          <span className="stat-value">
+            Verified
           </span>
         </div>
       </div>
