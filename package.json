@@ -10,12 +10,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hyperledger/fabric-gateway": "^1.7.1",
     "crypto-browserify": "^3.12.1",
     "crypto-js": "^4.2.0",
     "firebase": "^11.5.0",
+    "otpauth": "^9.4.0",
+    "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^7.4.0"
+    "react-router-dom": "^7.4.0",
+    "speakeasy": "^2.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",

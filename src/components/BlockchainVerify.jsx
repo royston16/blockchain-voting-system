@@ -1,116 +1,181 @@
 import { useState, useEffect } from 'react'
 import BlockchainInfo from './BlockchainInfo'
+import blockchainService from '../blockchain/fabric-gateway'
 
-export default function BlockchainVerify({ votes }) {
-  const [load, setLoad] = useState(true);
-  const [loadingWords, setLoadingWords] = useState(null);
+export default function BlockchainVerify() {
+  const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState("Loading... Chain is checking validation");
   const [showChainData, setShowChainData] = useState(false);
-  const [validation, setValidation] = useState(false)
+  const [validation, setValidation] = useState(false);
+  const [votes, setVotes] = useState([]);
+  const [chainStatus, setChainStatus] = useState(null);
+  const [displayedBlocks, setDisplayedBlocks] = useState(10);
+  const [expandedBlock, setExpandedBlock] = useState(null);
 
   useEffect(() => {
-    setTimeout(() => {
-        setLoadingWords("Validation or invalidation complete see results below");
-        setLoad(false);
+    async function verifyBlockchain() {
+      setLoadingMessage("Loading... Chain is checking validation");
+      
+      try {
+        // Initialize blockchain
+        await blockchainService.initialize();
+        
+        // Get all votes
+        const votesData = await blockchainService.getAllVotes();
+        
+        // Add previous hash references
+        const votesWithHashes = votesData.map((vote, index) => ({
+          ...vote,
+          previousHash: index > 0 ? votesData[index - 1].txId : "Genesis block"
+        }));
+        
+        setVotes(votesWithHashes);
+        
+        // Verify chain
+        const status = await blockchainService.verifyChain();
+        setChainStatus(status);
+        setValidation(status.isValid);
+        
+        setLoadingMessage("Validation complete. See results below.");
         setShowChainData(true);
-    }, 2000);
-
-    // actually check the chain now to see what data you should display
-    let isValid = true;
-    for(let i = window.allBlocks.length - 1; i > 0; i--)
-    {
-      if(window.allBlocks[i].getPreviousBlockHash() === window.allBlocks[i-1].getCurrentBlockHash())
-      {
-        console.log("checked1")
-      }
-      else
-      {
-        // chain invalid
-        isValid = false;
+      } catch (error) {
+        console.error('Error verifying blockchain:', error);
+        setLoadingMessage("Error validating blockchain. Please try again.");
+        setValidation(false);
+      } finally {
+        setLoading(false);
       }
     }
-    setValidation(isValid);
+    
+    verifyBlockchain();
+  }, []);
 
-  }, [])
+  const loadMoreBlocks = () => {
+    setDisplayedBlocks(prev => Math.min(prev + 10, votes.length));
+  };
 
-  let loadingStatus;
-  if(load)
-  {
-    loadingStatus = (
-      <div className="">
-        <div className=""></div>
-        <p>Loading... Chain is checking validation</p>
-      </div>
-    )
-  }
-  else
-  {
-    loadingStatus = (
-      <div className="">
-        <div className=""></div>
-        <p>{loadingWords}</p>
-      </div>
-    )
-  }
+  const truncateHash = (hash) => {
+    if (!hash) return '';
+    return hash.length > 16 ? `${hash.substring(0, 8)}...${hash.substring(hash.length - 8)}` : hash;
+  };
+
+  let loadingStatus = loading ? (
+    <div>
+      <p>Loading... Chain is checking validation</p>
+    </div>
+  ) : (
+    <div>
+      <p>{loadingMessage}</p>
+    </div>
+  );
+
   let chainData;
-  if(window.allBlocks.length === 0)
-  {
+  if (votes.length === 0) {
     chainData = (
-        <span>No votes cast so chain not established</span>
-    )
-  }
-  else
-  {
-    if(showChainData)
-    {
-      chainData = (
-        <div>
-          <span class="numBlocksSpan">Number of Blocks: {window.allBlocks.length}</span>
-          <ul>
-          {window.allBlocks.map((block, i) => (
-            <li key={i} class="blockLi">
-              <div class="blockHashInfo">
-                Block {i + 1} - Previous Hash: {block.getPreviousBlockHash()} <br></br>
-                Block {i + 1} - Block Hash: {block.getCurrentBlockHash()} 
-              </div>
-              <hr class="hrDivider"></hr>
-            </li>
-          ))}
-          </ul>
+      <span>No votes cast so chain not established</span>
+    );
+  } else if (showChainData) {
+    chainData = (
+      <div>
+        <div className="flex justify-between items-center mb-6">
+          <div className="text-2xl font-bold">
+            Number of Blocks: {chainStatus?.blockCount || votes.length}
+          </div>
+          <div className="text-sm text-gray-500">
+            Click on a block to view details
+          </div>
         </div>
         
-      )
-    }
-    else
-    {
+        <div className="max-h-[600px] overflow-y-auto pr-4">
+          {votes.slice(0, displayedBlocks).map((vote, i) => (
+            <div 
+              key={i} 
+              className={`mb-4 bg-white rounded-lg shadow-md transition-all duration-200 ${
+                expandedBlock === i ? 'ring-2 ring-indigo-500' : 'hover:shadow-lg cursor-pointer'
+              }`}
+              onClick={() => setExpandedBlock(expandedBlock === i ? null : i)}
+            >
+              <div className="p-4">
+                <div className="flex justify-between items-center">
+                  <div className="text-lg font-semibold text-indigo-600">
+                    Block {i + 1}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {new Date(vote.timestamp).toLocaleString()}
+                  </div>
+                </div>
+
+                {/* Always visible summary */}
+                <div className="mt-2 text-sm text-gray-600">
+                  Hash: <code className="bg-gray-100 px-2 py-1 rounded">{truncateHash(vote.txId)}</code>
+                </div>
+
+                {/* Expandable details */}
+                {expandedBlock === i && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="space-y-3">
+                      <div>
+                        <div className="text-sm font-medium text-gray-500">Full Block Hash</div>
+                        <code className="block mt-1 text-sm bg-gray-100 p-2 rounded break-all">
+                          {vote.txId}
+                        </code>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-500">Previous Block Hash</div>
+                        <code className="block mt-1 text-sm bg-gray-100 p-2 rounded break-all">
+                          {vote.previousHash}
+                        </code>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-500">Block Data</div>
+                        <div className="mt-1 bg-gray-100 p-2 rounded text-sm">
+                          <div>Vote Cast: Candidate {vote.candidate}</div>
+                          <div>Timestamp: {new Date(vote.timestamp).toLocaleString()}</div>
+                          <div>Block Number: {i + 1}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        
+        {displayedBlocks < votes.length && (
+          <button
+            onClick={loadMoreBlocks}
+            className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow"
+          >
+            Load More Blocks
+          </button>
+        )}
+      </div>
+    );
+  } else {
     chainData = (
       <div>Loading...</div>
-    )
-    }
+    );
   }
 
   let validationDiv;
-  if(showChainData)
-  {
-    if(validation)
-    {
-      validationDiv = (
-        <div>Chain has been validated!</div>
-      )
-    }
-    else
-    {
-      validationDiv = (
-        <div>Chain is invalid check for breaches!</div>
-      )
-    }
-  }
-  else
-  {
+  if (showChainData) {
+    validationDiv = validation ? (
+      <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+        <span className="font-bold">✓</span> Chain has been validated!
+      </div>
+    ) : (
+      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+        <span className="font-bold">⚠</span> Chain is invalid - check for breaches!
+      </div>
+    );
+  } else {
     validationDiv = (
-      <div>Chain is currently validating</div>
-    )
+      <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
+        Chain is currently validating...
+      </div>
+    );
   }
-
 
   return (
     <div>
@@ -118,13 +183,13 @@ export default function BlockchainVerify({ votes }) {
       <div className="card">
         {loadingStatus}
       </div>
-      <div className='card'>
+      <div className="card">
         {chainData}
-        <div>
-            <span>Validation Status... </span>
-            {validationDiv}
+        <div className="mt-6">
+          <span className="font-semibold">Validation Status: </span>
+          {validationDiv}
         </div>
       </div>
     </div>
-  )
+  );
 }

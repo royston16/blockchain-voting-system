@@ -1,137 +1,202 @@
 import { useState, useEffect } from 'react'
 import BlockchainInfo from './BlockchainInfo'
-import Block from '../chain/Blockchain'
+import blockchainService from '../blockchain/fabric-gateway'
+import VoteReceipt from './VoteReceipt'
 
 export default function VotingDashboard({ user, votes, setVotes }) {
   const [selectedCandidate, setSelectedCandidate] = useState('')
   const [votingStatus, setVotingStatus] = useState('ready')
-  const [transactionHash, setTransactionHash] = useState('')
+  const [transactionData, setTransactionData] = useState(null)
+  const [showReceipt, setShowReceipt] = useState(false)
+  const [hasVoted, setHasVoted] = useState(false)
+  const [statusMessage, setStatusMessage] = useState('')
+  const [sessionInfo, setSessionInfo] = useState(null)
+  
   const candidates = [
     { id: 'A', name: 'Candidate A', party: 'Party 1', description: 'Experienced leader with proven track record' },
     { id: 'B', name: 'Candidate B', party: 'Party 2', description: 'Fresh perspective and innovative ideas' },
     { id: 'C', name: 'Candidate C', party: 'Party 3', description: 'Focus on economic development and stability' }
   ]
-  const [isVisible, setVisibility] = useState(false)
+
+  // Initialize blockchain service and check vote status when component mounts
+  useEffect(() => {
+    const checkVoteStatus = async () => {
+      try {
+        await blockchainService.initialize();
+        const allVotes = await blockchainService.getAllVotes();
+        
+        // Check for existing votes by this user
+        const userVotes = allVotes.filter(vote => {
+          
+          // Check if this email has already voted by checking some property in the vote
+          // In a real system, this would be more secure
+          return vote.voterId.includes(user.email) || (vote.originalVoter && vote.originalVoter === user.email);
+        });
+        
+        if (userVotes.length > 0) {
+          setHasVoted(true);
+          setStatusMessage('You have already cast your vote.');
+          setVotingStatus('completed');
+          
+          // Show the most recent vote's receipt
+          const mostRecentVote = userVotes[userVotes.length - 1];
+          setTransactionData(mostRecentVote);
+          setShowReceipt(true);
+          
+          // Set session info from the vote
+          setSessionInfo({
+            voterId: mostRecentVote.voterId,
+            sessionId: mostRecentVote.sessionId,
+            timestamp: mostRecentVote.timestamp
+          });
+        }
+      } catch (error) {
+        console.error('Error checking vote status:', error);
+        setStatusMessage('Error checking vote status. Please try again.');
+      }
+    };
+    
+    if (user && user.email) {
+      checkVoteStatus();
+    }
+  }, [user]);
 
   const handleVote = async () => {
-    if (!selectedCandidate) return alert('Please select a candidate')
-    
-    setVotingStatus('processing')
-    
-    // Mock blockchain transaction
-    await new Promise(resolve => setTimeout(resolve, 2000))
-
-    const mockHash = `0x${Math.random().toString(16).substr(2, 64)}`
-    
-    const newVote = {
-      voterKey: user.key,
-      voterName: user.name,
-      voterEmail: user.email,
-      candidate: selectedCandidate,
-      timestamp: new Date().toISOString(),
+    if (!selectedCandidate) {
+      setStatusMessage('Please select a candidate');
+      return;
     }
-
-    // check if vote is valid if email has already been used
-    let foundEmail = false;
-    let count = 0;
-    for(let i = 0; i < window.allBlocks.length; i++)
-      {
-        if(newVote.voterEmail == window.allBlocks[i].getVoterEmail())
-        {
-          count = count + 1
-          if(count >= 3)
-          {
-            foundEmail = true;
-            break;
-          }
-        }
-      }
-    if(foundEmail)
-    {
-      // show div that says email is not valid
-      setVisibility(true)
-      setVotingStatus('completed')
-      setSelectedCandidate('')
+    
+    if (hasVoted) {
+      setStatusMessage('You have already cast your vote');
+      return;
     }
-    else
-    { 
-      setVisibility(false)
-      // process vote
-      setVotes([...votes, newVote])
-      setVotingStatus('completed')
-      setSelectedCandidate('')
+    
+    setStatusMessage('Submitting your vote...');
+    setVotingStatus('processing');
+    
+    try {
+      console.log('Starting vote submission for user:', user.email);
       
-      if(window.allBlocks.length === 0)
-      {
-        // first block
-        let newBlock = new Block(newVote.voterEmail, newVote.timestamp,
-                            newVote.candidate, window.firstBlockPreviousHash);
-        window.allBlocks.push(newBlock);
-        setTransactionHash(window.allBlocks[window.allBlocks.length - 1].getCurrentBlockHash())
-      }
-      else
-      {
-        let oldBlock = window.allBlocks[window.allBlocks.length - 1]
-        let newBlock = new Block(newVote.voterEmail, newVote.timestamp,
-                            newVote.candidate, oldBlock.getCurrentBlockHash());
-        window.allBlocks.push(newBlock)
-        setTransactionHash(window.allBlocks[window.allBlocks.length - 1].getCurrentBlockHash())
-      }
+      // Cast vote using blockchain service - pass email for identification
+      // In a real implementation, we'd use a more secure identifier
+      const result = await blockchainService.castVote(user.email, selectedCandidate);
+      console.log('Vote cast successful, result:', result);
       
-      console.log(window.allBlocks)
+      // Add original voter email to result for easier lookups
+      result.originalVoter = user.email;
+      
+      // Update transaction data and show receipt
+      setTransactionData(result);
+      setShowReceipt(true);
+      
+      // Store session information for display
+      setSessionInfo({
+        voterId: result.voterId,
+        sessionId: result.sessionId,
+        timestamp: result.timestamp
+      });
+      
+      // Update states to reflect successful vote
+      setVotingStatus('completed');
+      setSelectedCandidate('');
+      setHasVoted(true);
+      setStatusMessage('Your vote has been successfully recorded on the blockchain!');
+      
+    } catch (error) {
+      console.error('Error casting vote:', error);
+      setVotingStatus('error');
+      setStatusMessage(error.message || 'An error occurred while submitting your vote');
     }
-
-    
   }
 
   return (
     <div>
       <BlockchainInfo />
       <div className="card">
-        <h2>Cast Your Vote</h2>
-        <div className="candidates-grid">
+        <h2 className="text-2xl font-bold mb-6">Cast Your Vote</h2>
+        
+        {/* Session Info */}
+        {sessionInfo && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <h3 className="text-lg font-semibold mb-2">Voting Session Information</h3>
+            <div className="grid gap-2 text-sm">
+              <div>
+                <span className="font-medium">Session ID: </span>
+                <code className="bg-white px-2 py-1 rounded">{sessionInfo.sessionId || 'Not available'}</code>
+              </div>
+              <div>
+                <span className="font-medium">Voter Hash: </span>
+                <code className="bg-white px-2 py-1 rounded">{sessionInfo.voterId || 'Not available'}</code>
+              </div>
+              <div>
+                <span className="font-medium">Session Time: </span>
+                <span>{sessionInfo.timestamp ? new Date(sessionInfo.timestamp).toLocaleString() : 'Not available'}</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Status Message */}
+        {statusMessage && (
+          <div className={`mb-6 p-4 rounded-lg ${
+            votingStatus === 'completed' ? 'bg-green-100 text-green-700 border border-green-200' :
+            votingStatus === 'error' ? 'bg-red-100 text-red-700 border border-red-200' :
+            votingStatus === 'processing' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+            'bg-gray-100 text-gray-700 border border-gray-200'
+          }`}>
+            <p className="text-center font-medium">{statusMessage}</p>
+          </div>
+        )}
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           {candidates.map(candidate => (
             <div 
               key={candidate.id} 
-              className={`candidate-card ${selectedCandidate === candidate.id ? 'selected' : ''}`}
-              onClick={() => setSelectedCandidate(candidate.id)}
+              className={`p-6 rounded-lg border-2 transition-all duration-200 ${
+                selectedCandidate === candidate.id 
+                  ? 'border-indigo-500 bg-indigo-50' 
+                  : 'border-gray-200 hover:border-indigo-200'
+              } ${hasVoted ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              onClick={() => !hasVoted && setSelectedCandidate(candidate.id)}
             >
-              <h3>{candidate.name}</h3>
-              <p className="party">{candidate.party}</p>
-              <p className="description">{candidate.description}</p>
-              <div className="radio-wrapper">
+              <h3 className="text-xl font-semibold mb-2">{candidate.name}</h3>
+              <p className="text-indigo-600 font-medium mb-3">{candidate.party}</p>
+              <p className="text-gray-600 mb-4">{candidate.description}</p>
+              <div className="flex items-center">
                 <input 
                   type="radio"
                   name="candidate"
                   value={candidate.id}
                   checked={selectedCandidate === candidate.id}
-                  onChange={(e) => setSelectedCandidate(e.target.value)}
+                  onChange={() => !hasVoted && setSelectedCandidate(candidate.id)}
+                  disabled={hasVoted}
+                  className="w-4 h-4 text-indigo-600"
                 />
-                <span className="radio-label">Select</span>
+                <span className="ml-2 text-gray-700">Select</span>
               </div>
             </div>
           ))}
         </div>
         
-        <div className="voting-actions">
+        <div className="flex justify-center">
           <button 
-            className="button" 
+            className={`px-8 py-3 rounded-lg font-medium transition-all duration-200 ${
+              hasVoted || votingStatus === 'processing' || !selectedCandidate
+                ? 'bg-gray-300 cursor-not-allowed'
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+            }`}
             onClick={handleVote}
-            disabled={votingStatus === 'processing' || !selectedCandidate}
+            disabled={hasVoted || votingStatus === 'processing' || !selectedCandidate}
           >
-            {votingStatus === 'processing' ? 'Processing...' : 'Submit Vote'}
+            {votingStatus === 'processing' ? 'Processing...' : 
+             hasVoted ? 'Vote Submitted' : 'Submit Vote'}
           </button>
-      
         </div>
-        {isVisible && (
-            <div class="voting-popup">Email Invalid. Already Voted Aloted Number of Times!</div>
-          )}
 
-        {transactionHash && (
-          <div className="transaction-info">
-            <h3>Transaction Details</h3>
-            <p>Transaction Hash: <code>{transactionHash}</code></p>
-            <p>Status: <span className="status-success">Confirmed</span></p>
+        {showReceipt && transactionData && (
+          <div className="mt-8 p-6 bg-white border-2 border-indigo-200 rounded-lg shadow-lg">
+            <VoteReceipt transactionData={transactionData} />
           </div>
         )}
       </div>
