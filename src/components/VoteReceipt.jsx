@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+//method to display the vote receipt for the voter to ensure the integrity of their vote
+//with the ability to download the receipt as a text file
 export default function VoteReceipt({ transactionData }) {
   const [showDetails, setShowDetails] = useState(false);
   
@@ -8,6 +10,7 @@ export default function VoteReceipt({ transactionData }) {
     return null;
   }
   
+  //method to download the vote receipt as a text file
   const downloadReceipt = () => {
     const receiptContent = `
 VOTE RECEIPT
@@ -25,7 +28,7 @@ Your vote is anonymous and can only be traced using your voter hash.
 Your voting session is uniquely identified by the session ID.
     `;
     
-    // Create and download file
+    //create and download the file
     const blob = new Blob([receiptContent], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -41,21 +44,22 @@ Your voting session is uniquely identified by the session ID.
     if (!id) return 'N/A';
     if (id.length <= 16) return id;
     
-    // Different formatting for different ID types
+    //different formatting for different ID types
     if (type === 'voter') {
-      // For voter hashes, show first 6 and last 4 characters
+      //for voter hashes, show first 6 and last 4 characters
       return `${id.substring(0, 6)}...${id.substring(id.length - 4)}`;
     } else if (type === 'session') {
-      // For session IDs, show first 8 characters
+      //for session IDs, show first 8 characters
       return `${id.substring(0, 8)}...`;
     } else {
-      // For transaction IDs, show first 8 and last 8 characters
+      //for transaction IDs, show first 8 and last 8 characters
       return `${id.substring(0, 8)}...${id.substring(id.length - 8)}`;
     }
   };
   
   console.log('Rendering VoteReceipt with data:', transactionData);
   
+  //front end display of the vote receipt
   return (
     <div className="text-center">
       <h3 className="text-2xl font-bold mb-4">Vote Receipt</h3>

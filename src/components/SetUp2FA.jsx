@@ -3,6 +3,7 @@ import { generateSecret, enable2FA } from '../../authentication/twoFactor';
 import { db, auth } from '../../authentication/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
+//method to set up the 2FA for the voter to ensure the security of their account
 export default function SetUp2FA({ user }) {
   const [secret, setSecret] = useState('');
   const [qrCode, setQrCode] = useState('');
@@ -10,6 +11,7 @@ export default function SetUp2FA({ user }) {
   const [status, setStatus] = useState('initial');
   const [isEnabled, setIsEnabled] = useState(false);
   
+  //method to check if the 2FA is enabled for the voter
   useEffect(() => {
     async function checkEnabledStatus() {
       if (auth.currentUser?.uid) {
@@ -27,6 +29,7 @@ export default function SetUp2FA({ user }) {
     checkEnabledStatus();
   }, []);
   
+  //method to generate the secret key for the 2FA
   const handleGenerateSecret = async () => {
     if (!auth.currentUser?.uid) {
       alert('You must be logged in to set up 2FA');
@@ -44,7 +47,8 @@ export default function SetUp2FA({ user }) {
       setStatus('error');
     }
   };
-  
+
+  //method to submit the 2FA code for the 2FA verification process
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -64,6 +68,7 @@ export default function SetUp2FA({ user }) {
     }
   };
   
+  //condition to display that the 2FA is enabled for the voter
   if (isEnabled) {
     return (
       <div className="card">
@@ -76,7 +81,8 @@ export default function SetUp2FA({ user }) {
       </div>
     );
   }
-  
+
+  //front end display of the 2FA setup
   return (
     <div className="card">
       <h2 className="text-xl font-bold mb-4">Setup Two-Factor Authentication</h2>

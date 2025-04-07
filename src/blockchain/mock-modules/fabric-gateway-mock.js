@@ -1,16 +1,19 @@
-// This is a simple mock for the Hyperledger Fabric Gateway module
-// It provides enough structure for our frontend to work with
+//a mock module for the Hyperledger Fabric Gateway that
+//provides enough structure for the frontend to work with
 
+//method to connect to the gateway with the required parameters
 export const connect = async () => {
   console.log('Mock connect function called');
   return {};
 };
 
+//gateway class to connect to the gateway with the required parameters
 export class Gateway {
   connect() {
     return Promise.resolve(this);
   }
   
+  //method to get the network with the required parameters
   getNetwork() {
     return Promise.resolve({
       getContract: () => ({
@@ -25,16 +28,19 @@ export class Gateway {
   }
 }
 
+//identity class to get the identity with the required parameters
 export class Identity {
   static fromX509 = () => new Identity();
   constructor() {}
 }
 
+//signer class to get the signer with the required parameters
 export class Signer {
   static fromPrivateKey = () => new Signer();
   constructor() {}
 }
 
+//export the connect, Gateway, Identity and Signer classes
 export default {
   connect,
   Gateway,

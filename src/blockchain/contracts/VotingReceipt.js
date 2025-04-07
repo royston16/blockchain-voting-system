@@ -1,5 +1,8 @@
+//voting receipt for the application to verify the vote
+
 import { useState } from 'react';
 
+//voting receipt component to verify the vote by the user
 export default function VoteReceipt({ transactionData }) {
   const [showDetails, setShowDetails] = useState(false);
   
@@ -16,7 +19,7 @@ This receipt proves your vote was recorded on the blockchain.
 The integrity of your vote can be verified using the transaction ID.
     `;
     
-    // Create and download file
+    //create and download the file with the receipt content
     const blob = new Blob([receiptContent], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -28,6 +31,7 @@ The integrity of your vote can be verified using the transaction ID.
     URL.revokeObjectURL(url);
   };
   
+  //return the voting receipt component with the details of the vote
   return (
     <div className="vote-receipt-container">
       <h3>Vote Confirmation</h3>

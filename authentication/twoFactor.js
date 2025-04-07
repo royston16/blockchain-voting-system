@@ -1,11 +1,12 @@
+//two factor authentication for the application using OTP (One-Time Password)
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import * as OTPAuth from 'otpauth';
 
-// Generate secret for a user
+//generate secret for a user
 export const generateSecret = async (userId) => {
   try {
-    // Create a new TOTP object
+    //create a new TOTP (Time-based One-Time Password) object
     const totp = new OTPAuth.TOTP({
       issuer: 'BlockchainVote',
       label: userId,
@@ -14,19 +15,19 @@ export const generateSecret = async (userId) => {
       period: 30
     });
 
-    // Generate a random secret
+    //generate a random secret
     const secret = totp.secret.base32;
     
-    // Store secret in Firestore
+    //store secret in Firestore
     await setDoc(doc(db, 'voters', userId), {
       twoFactorSecret: secret,
       twoFactorEnabled: false
     }, { merge: true });
     
-    // Generate otpauth URL for QR code
+    //generate otpauth URL for QR code
     const otpauthUrl = totp.toString();
     
-    // Use a free online API to generate a QR code
+    //use a free online API to generate a QR code for the user to scan
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(otpauthUrl)}`;
     
     return { secret, qrCodeUrl };
@@ -36,7 +37,7 @@ export const generateSecret = async (userId) => {
   }
 };
 
-// Verify token
+//verify token for the user
 export const verifyToken = async (userId, token) => {
   try {
     const userDoc = await getDoc(doc(db, 'voters', userId));
@@ -51,7 +52,7 @@ export const verifyToken = async (userId, token) => {
       throw new Error('2FA not set up for this user');
     }
     
-    // Create a TOTP object with the user's secret
+    //create a TOTP object with the user's secret
     const totp = new OTPAuth.TOTP({
       issuer: 'BlockchainVote',
       label: userId,
@@ -61,7 +62,7 @@ export const verifyToken = async (userId, token) => {
       secret: secret
     });
     
-    // Verify the token
+    //verify the token with the secret
     const delta = totp.validate({ token });
     return delta !== null;
   } catch (error) {
@@ -70,7 +71,7 @@ export const verifyToken = async (userId, token) => {
   }
 };
 
-// Enable 2FA for user
+//enable 2FA for the user by verifying the token
 export const enable2FA = async (userId, token) => {
   try {
     const verified = await verifyToken(userId, token);

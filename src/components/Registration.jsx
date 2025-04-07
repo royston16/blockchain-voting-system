@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import bg from "../assets/bg-image.png";
 import { registerVoter, logoutVoter, checkEmailAvailability } from "../../authentication/firebase";
 
+//method to register the voter with the required parameters
 export default function Registration() {
   const [formData, setFormData] = useState({ 
     name: "", 
@@ -20,7 +21,7 @@ export default function Registration() {
   const [emailStatus, setEmailStatus] = useState({ checking: false, available: true, message: "" });
   const navigate = useNavigate();
 
-  // Debounced email check
+  //debounced email check to prevent spamming the server
   const debouncedEmailCheck = useCallback(
     async (email) => {
       if (!email || !email.includes('@')) {
@@ -50,41 +51,41 @@ export default function Registration() {
     []
   );
 
-  // Handle email change with debouncing
+  //handle email change with debouncing
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (formData.email) {
         debouncedEmailCheck(formData.email);
       }
-    }, 500); // 500ms delay
+    }, 500); //500ms delay to prevent spamming the server
 
     return () => clearTimeout(timeoutId);
   }, [formData.email, debouncedEmailCheck]);
 
-  // Generate simple math captcha on component mount
+  //generate a simple math captcha on component mount
   useEffect(() => {
     generateCaptcha();
   }, []);
 
-  // Generate a pattern recognition CAPTCHA that's difficult for bots
+  //generate a pattern recognition CAPTCHA that's difficult for bots
   const generateCaptcha = () => {
-    // Create a random array of symbols
+    //create a random array of symbols
     const symbols = ['@', '#', '$', '%', '&', '*', '+', '=', '>', '<'];
     const targetSymbol = symbols[Math.floor(Math.random() * symbols.length)];
     
-    // Create a pattern with random distribution of symbols
+    //create a pattern with random distribution of symbols
     let pattern = '';
     let count = 0;
     
-    const patternLength = Math.floor(Math.random() * 10) + 20; // 20-30 characters
+    const patternLength = Math.floor(Math.random() * 10) + 20; //20-30 characters
     
     for (let i = 0; i < patternLength; i++) {
-      // Decide whether to add the target symbol or a random one
-      if (Math.random() < 0.3) { // 30% chance for target symbol
+      //decide whether to add the target symbol or a random one
+      if (Math.random() < 0.3) { //30% chance for target symbol that is the answer to the CAPTCHA
         pattern += targetSymbol;
         count++;
       } else {
-        // Add a random symbol that's not the target
+        //add a random symbol that's not the target
         const otherSymbols = symbols.filter(s => s !== targetSymbol);
         pattern += otherSymbols[Math.floor(Math.random() * otherSymbols.length)];
       }
@@ -97,6 +98,7 @@ export default function Registration() {
     setCaptchaAnswer("");
   };
 
+  //method to handle the submission of the registration form
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -104,42 +106,42 @@ export default function Registration() {
     setSuccess(false);
     
     try {
-      // Validate email
+      //validate the email
       if (!formData.email.includes('@')) {
         throw new Error('Please enter a valid email address');
       }
       
-      // Additional validation
+      //additional validation
       if (formData.name.trim().length < 2) {
         throw new Error('Please enter your full name');
       }
       
-      // Validate password
+      //validate the password
       if (formData.password.length < 6) {
         throw new Error('Password must be at least 6 characters long');
       }
       
-      // Confirm password
+      //confirm the password
       if (formData.password !== formData.confirmPassword) {
         throw new Error('Passwords do not match');
       }
       
-      // Validate captcha
+      //validate the captcha to ensure the user is human
       if (parseInt(captchaAnswer) !== captcha.answer) {
         throw new Error('Incorrect CAPTCHA answer');
       }
 
-      // Validate age verification
+      //validate the age verification to ensure the user is over 18
       if (!isOver18) {
         throw new Error('You must confirm that you are 18 years or older');
       }
 
-      // Validate consent
+      //validate the consent to ensure the user understands the terms and conditions
       if (!consentToTerms) {
         throw new Error('You must agree to the terms and conditions');
       }
       
-      // Register voter with email and password
+      //register the voter with the email and password
       await registerVoter(formData.email, formData.password, {
         name: formData.name,
         registrationTime: new Date().toISOString(),
@@ -147,23 +149,23 @@ export default function Registration() {
         hasConsented: consentToTerms
       });
       
-      // Show success message
+      //show the success message
       setSuccess(true);
       
-      // Clear form
+      //clear the form
       setFormData({ name: "", email: "", password: "", confirmPassword: "" });
       setCaptchaAnswer("");
       setIsOver18(false);
       setConsentToTerms(false);
       generateCaptcha();
       
-      // Explicitly log out the user first (Firebase automatically signs in new users)
+      //explicitly log out the user first (Firebase automatically signs in new users)
       await logoutVoter();
       
-      // Automatically redirect to login page after logging out
+      //automatically redirect to the login page after logging out
       setTimeout(() => {
         navigate("/login");
-      }, 1500);                // 1500ms delay
+      }, 1500);                //1500ms delay
       
     } catch (err) {
       console.error("Registration error:", err);
@@ -173,6 +175,7 @@ export default function Registration() {
     }
   };
 
+  //front end display of the registration form
   return (
     <div className="card flex justify-between">
       <form onSubmit={handleSubmit} className="w-full pr-4">
@@ -256,7 +259,7 @@ export default function Registration() {
           />
         </div>
 
-        {/* CAPTCHA */}
+        {/* CAPTCHA part where the user has to solve a simple math problem to prove they are human */}
         <div className="mt-4">
           <label className="font-semibold">CAPTCHA: {captcha.question}</label>
           <input
@@ -276,7 +279,7 @@ export default function Registration() {
           </button>
         </div>
 
-        {/* Age Verification */}
+        {/* Age Verification part where the user has to confirm they are over 18 */}
         <div className="mt-4 flex items-center">
           <input
             type="checkbox"
@@ -291,7 +294,7 @@ export default function Registration() {
           </label>
         </div>
 
-        {/* Consent Checkbox */}
+        {/* Consent Checkbox part where the user has to confirm they understand the terms and conditions */}
         <div className="mt-2 flex items-center">
           <input
             type="checkbox"

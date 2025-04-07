@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import BlockchainInfo from './BlockchainInfo'
 import blockchainService from '../blockchain/fabric-gateway'
 
+//method to display the results of the election
 export default function Results() {
   const [results, setResults] = useState({})
   const [votes, setVotes] = useState([])
@@ -11,10 +12,10 @@ export default function Results() {
   useEffect(() => {
     async function fetchData() {
       try {
-        // Initialize blockchain connection if needed
+        //initialize the blockchain connection if needed
         await blockchainService.initialize()
         
-        // Get results and all votes
+        //get the results and all votes
         const resultsData = await blockchainService.getResults()
         setResults(resultsData)
         
@@ -30,32 +31,36 @@ export default function Results() {
     fetchData()
   }, [])
 
+  //display the percentage of votes for each candidate
   const getPercentage = (votes) => {
     const total = Object.values(results).reduce((a, b) => a + b, 0)
     return total > 0 ? ((votes / total) * 100).toFixed(1) : 0
   }
 
+  //method to load more votes
   const loadMoreVotes = () => {
     setDisplayedVotes(prev => Math.min(prev + 10, votes.length))
   }
 
+  //method to format the ID of the voter, session, or transaction
   const formatId = (id, type = 'tx') => {
     if (!id) return 'N/A';
     if (id.length <= 16) return id;
     
-    // Different formatting for different ID types
+    //different formatting for different ID types
     if (type === 'voter') {
-      // For voter hashes, show first 6 and last 4 characters
+      //for voter hashes, show first 6 and last 4 characters
       return `${id.substring(0, 6)}...${id.substring(id.length - 4)}`;
     } else if (type === 'session') {
-      // For session IDs, show first 8 characters
+      //for session IDs, show first 8 characters
       return `${id.substring(0, 8)}...`;
     } else {
-      // For transaction IDs, show first 8 and last 8 characters
+      //for transaction IDs, show first 8 and last 8 characters
       return `${id.substring(0, 8)}...${id.substring(id.length - 8)}`;
     }
   };
 
+  //front end display of the results
   return (
     <div className="w-full max-w-none">
       <BlockchainInfo />

@@ -14,15 +14,15 @@ import blockchainService from './blockchain/fabric-gateway'
 import TestingDashboard from './components/TestingDashboard'
 import VoteReceiptViewer from './components/VoteReceiptViewer'
 
-// initialize the block chain on load
-// check to see if previous blocks/votes exist
+//initialize the block chain on load
+//check to see if previous blocks/votes exist
 if (true) 
 {
   window.allBlocks = [];
 }
 else
 {
-  // load from the file all current votes
+  //load from the file all current votes
 }
 window.firstBlockPreviousHash = "9ab0a3600a1eba7002afccb2931ba5e7";
 window.firstBlockHash = "9ab0a3600a1eba7002afccb2931ba5e7";
@@ -33,48 +33,48 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [pending2FA, setPending2FA] = useState(false)
 
-  // Custom setUser function that handles 2FA state
+  //custom setUser function that handles the 2FA state
   const handleSetUser = (userData, requires2FA = false) => {
     if (requires2FA) {
-      // Set pending2FA state to true but don't set the user yet
+      //set the pending2FA state to true but don't set the user yet
       console.log("2FA pending, authentication not complete yet");
       setPending2FA(true);
-      // We don't set user data here to prevent the app from considering the user as logged in
+      //set user data here to prevent the app from considering the user as logged in
     } else {
-      // User is fully authenticated (including 2FA if required)
+      //user is fully authenticated (including 2FA if required)
       console.log("User fully authenticated, setting user data:", userData);
       setPending2FA(false);
       setUser(userData);
     }
   };
 
-  // Fetch user data from Firestore
+  //fetch user data from the firestore database
   const fetchUserData = async (firebaseUser) => {
     try {
-      // Get the user from Firestore
+      //get the user from the firestore
       const userDoc = await getDoc(doc(db, 'voters', firebaseUser.uid));
       
       if (userDoc.exists()) {
         const userData = userDoc.data();
         
-        // Check if user has 2FA enabled
+        //check if the user has 2FA enabled
         if (userData.twoFactorEnabled) {
-          // Don't fully authenticate yet - wait for 2FA verification
+          //do not fully authenticate yet - wait for 2FA verification
           console.log("User has 2FA enabled, authentication pending 2FA verification");
           return;
         }
         
-        // Set the complete user data including the voterKey
+        //set the complete user data including the voterKey
         setUser({
           uid: firebaseUser.uid,
           email: firebaseUser.email,
           emailVerified: firebaseUser.emailVerified,
-          ...userData // This includes the voterKey and any other Firestore data
+          ...userData //this includes the voterKey and any other firestore data
         });
         
         console.log("User data loaded with voterKey:", userData.voterKey);
       } else {
-        // If no Firestore document exists, fall back to basic Firebase data
+        //if no firestore document exists, fall back to basic firebase data
         setUser({
           uid: firebaseUser.uid,
           email: firebaseUser.email,
@@ -83,8 +83,8 @@ function App() {
         console.warn("No Firestore document found for user");
       }
     } catch (error) {
-      console.error("Error fetching user data:", error);
-      // Fall back to basic user data
+      console.error("error fetching user data:", error);
+      //fall back to basic user data
       setUser({
         uid: firebaseUser.uid,
         email: firebaseUser.email,
@@ -93,33 +93,33 @@ function App() {
     }
   };
 
-  // Check for authenticated user on app load
+  //check for the authenticated user on app load
   useEffect(() => {
     const unsubscribe = checkAuthState(async (firebaseUser) => {
       if (firebaseUser) {
-        // User is signed in
+        //user is signed in
         if (firebaseUser.emailVerified) {
-          // Fetch the complete user data including voterKey
+          //fetch the complete user data including the voterKey
           await fetchUserData(firebaseUser);
         } else {
-          // Log out users with unverified emails
+          //log out users with unverified emails
           logoutVoter();
           setUser(null);
           setPending2FA(false);
         }
       } else {
-        // User is signed out
+        //user is signed out
         setUser(null);
         setPending2FA(false);
       }
       setLoading(false);
     });
 
-    // Cleanup subscription on unmount
+    //cleanup the subscription on unmount
     return () => unsubscribe();
   }, []);
 
-  // Initialize blockchain service
+  //initialize the blockchain service
   useEffect(() => {
     async function initBlockchain() {
       await blockchainService.initialize();
@@ -128,7 +128,7 @@ function App() {
     initBlockchain();
   }, []);
 
-  // Protected route wrapper component
+  //protected route wrapper component
   const ProtectedRoute = ({ children }) => {
     if (loading) {
       return <div className="loading">Loading...</div>
@@ -148,7 +148,7 @@ function App() {
   return (
     <Router>
       <div className="container mx-auto px-4">
-        {/* Show navbar for all users except during pending 2FA */}
+        {/*show the navbar for all users except during pending 2FA*/}
         {!pending2FA && <Navbar user={user} setUser={setUser} />}
         
         <Routes>

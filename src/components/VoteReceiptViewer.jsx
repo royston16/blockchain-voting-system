@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import blockchainService from '../blockchain/fabric-gateway';
 import VoteReceipt from './VoteReceipt';
 
+//method to display the viewer for the vote receipts
+//directly on the front end interface
 export default function VoteReceiptViewer({ user }) {
   const [votes, setVotes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -15,11 +17,11 @@ export default function VoteReceiptViewer({ user }) {
         await blockchainService.initialize();
         const allVotes = await blockchainService.getAllVotes();
         
-        // Filter votes for current user using our improved matching logic
+        //filter the votes for the current user using the improved matching logic
         const userVotes = allVotes.filter(vote => {
-          // Match votes based on either:
-          // 1. Original voter email (most reliable)
-          // 2. Voter ID contains part of the email
+          //match the votes based on either:
+          //1. original voter email (most reliable)
+          //2. voter ID contains part of the email
           return (
             (vote.originalVoter && vote.originalVoter === user.email) ||
             (vote.voterId && vote.voterId.includes(user.email))
@@ -102,7 +104,7 @@ export default function VoteReceiptViewer({ user }) {
                     <button
                       className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
                       onClick={(e) => {
-                        e.stopPropagation(); // Prevent triggering the parent onClick
+                        e.stopPropagation(); //prevent triggering the parent onClick
                         setSelectedVote(vote);
                       }}
                     >

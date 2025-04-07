@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import BlockchainInfo from './BlockchainInfo'
 import blockchainService from '../blockchain/fabric-gateway'
 
+//method to verify the blockchain integrity
 export default function BlockchainVerify() {
   const [loading, setLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState("Loading... Chain is checking validation");
@@ -17,13 +18,13 @@ export default function BlockchainVerify() {
       setLoadingMessage("Loading... Chain is checking validation");
       
       try {
-        // Initialize blockchain
+        //initialize the blockchain
         await blockchainService.initialize();
         
-        // Get all votes
+        //get all the votes from the blockchain
         const votesData = await blockchainService.getAllVotes();
         
-        // Add previous hash references
+        //add the previous hash references (genesis block or previous block in the chain)
         const votesWithHashes = votesData.map((vote, index) => ({
           ...vote,
           previousHash: index > 0 ? votesData[index - 1].txId : "Genesis block"
@@ -31,7 +32,7 @@ export default function BlockchainVerify() {
         
         setVotes(votesWithHashes);
         
-        // Verify chain
+        //verify the chain
         const status = await blockchainService.verifyChain();
         setChainStatus(status);
         setValidation(status.isValid);
@@ -105,12 +106,10 @@ export default function BlockchainVerify() {
                   </div>
                 </div>
 
-                {/* Always visible summary */}
                 <div className="mt-2 text-sm text-gray-600">
                   Hash: <code className="bg-gray-100 px-2 py-1 rounded">{truncateHash(vote.txId)}</code>
                 </div>
 
-                {/* Expandable details */}
                 {expandedBlock === i && (
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <div className="space-y-3">

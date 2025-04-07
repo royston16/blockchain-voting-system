@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import blockchainService from '../blockchain/fabric-gateway'
 
+//method to display the blockchain information
 export default function BlockchainInfo() {
   const [blockInfo, setBlockInfo] = useState({
     currentBlock: 0,
@@ -10,6 +11,7 @@ export default function BlockchainInfo() {
     chainStatus: 'Validating...'
   })
 
+  //method to update the blockchain information
   useEffect(() => {
     const updateBlockchainInfo = async () => {
       try {
@@ -17,8 +19,9 @@ export default function BlockchainInfo() {
         const votes = await blockchainService.getAllVotes();
         const chainStatus = await blockchainService.verifyChain();
         
+        //update the blockchain information with the new values
         setBlockInfo(prev => ({
-          currentBlock: votes.length + 1, // Next block number
+          currentBlock: votes.length + 1, //next block number
           totalVotes: votes.length,
           lastUpdate: new Date().toISOString(),
           networkStatus: 'Connected',
@@ -34,14 +37,15 @@ export default function BlockchainInfo() {
       }
     };
 
-    // Initial update
+    //initial update of the blockchain information
     updateBlockchainInfo();
 
-    // Set up periodic updates
+    //set up periodic updates (every 5 seconds)
     const interval = setInterval(updateBlockchainInfo, 5000);
     return () => clearInterval(interval);
   }, []);
 
+  //front end display of the blockchain information
   return (
     <div className="card">
       <h3 className="text-xl font-bold mb-4">Blockchain Network Status</h3>

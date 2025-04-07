@@ -2,27 +2,28 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { logoutVoter } from '../../authentication/firebase';
 
-// eslint-disable-next-line react/prop-types
+//eslint-disable-next-line react/prop-types (no need for prop types in this component)
 export default function Navbar({ user, setUser }) {
   const navigate = useNavigate();
 
-  // Get a simple and reliable display name
+  //get a simple and reliable display name
   const getDisplayName = () => {
     if (!user) return '';
     
-    // Use voter key if available - this is the most reliable identifier
+    //use voter key if available - an unique identifier for each voter in the blockchain
     if (user.voterKey) return `${user.voterKey}`;
     
-    // Fall back to something from the email
+    //fall back to something like the email address to identify the voter
     if (user.email) {
       const username = user.email.split('@')[0];
       return `Voter #${username.substring(0, 4)}`;
     }
     
-    // Last resort
+    //last resort to identify the voter
     return 'Voter';
   };
 
+  //method to logout the voter
   const handleLogout = async () => {
     try {
       await logoutVoter();
@@ -33,6 +34,7 @@ export default function Navbar({ user, setUser }) {
     }
   };
 
+  //front end display of the navbar
   return (
     <nav className="bg-white shadow-md py-4 px-6 flex justify-between items-center mb-6">
       <div className="text-xl font-bold text-indigo-600">

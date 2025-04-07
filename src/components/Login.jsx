@@ -6,7 +6,7 @@ import { getDoc, doc } from "firebase/firestore";
 import { db } from "../../authentication/firebase";
 import { verifyToken } from "../../authentication/twoFactor";
 
-// eslint-disable-next-line react/prop-types
+//eslint-disable-next-line react/prop-types (no need for prop types in this component)
 export default function Login({ setUser }) {
   const [formData, setFormData] = useState({ 
     email: "",
@@ -16,8 +16,8 @@ export default function Login({ setUser }) {
   const [error, setError] = useState(null);
   const [verificationReminder, setVerificationReminder] = useState(false);
   const [require2FA, setRequire2FA] = useState(false);
-  const [token2FA, setToken2FA] = useState('');
-  const [tempUserData, setTempUserData] = useState(null); // Store user data while waiting for 2FA
+  const [token2FA, setToken2FA] = useState('');           //store the 2FA token for the user
+  const [tempUserData, setTempUserData] = useState(null); //store user data while waiting for 2FA
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -27,16 +27,16 @@ export default function Login({ setUser }) {
     setVerificationReminder(false);
     
     try {
-      // Validate inputs
+      //validate the inputs
       if (!formData.email || !formData.password) {
         throw new Error('Please enter both email and password');
       }
       
-      // Login with email and password
+      //login with email and password
       const result = await loginVoter(formData.email, formData.password);
       
       if (result && result.user) {
-        // Get the user from Firestore after email/password auth
+        //get the user from Firestore after email/password auth
         const userDoc = await getDoc(doc(db, 'voters', result.user.uid));
         
         if (!userDoc.exists()) {
@@ -46,7 +46,7 @@ export default function Login({ setUser }) {
         const userData = userDoc.data();
         console.log("Retrieved user data:", userData);
         
-        // Prepare the complete user data
+        //prepare the complete user data for the login process
         const completeUserData = {
           uid: result.user.uid,
           email: result.user.email,
@@ -54,27 +54,27 @@ export default function Login({ setUser }) {
           ...userData
         };
         
-        // Check if 2FA is enabled
+        //check if 2FA is enabled
         if (userData.twoFactorEnabled) {
           console.log("2FA is enabled for user, waiting for verification code");
           setRequire2FA(true);
-          setTempUserData(completeUserData); // Store data for after 2FA verification
-          setUser(completeUserData, true); // Signal that 2FA is pending
+          setTempUserData(completeUserData); //store data for after 2FA verification
+          setUser(completeUserData, true); //signal that 2FA is pending
           setLoading(false);
-          return; // Stop here and wait for 2FA
+          return; //stop here and wait for 2FA
         }
         
-        // No 2FA required, proceed with login
+        //if no 2FA required, proceed with login
         console.log("2FA not enabled, proceeding with login");
         setUser(completeUserData);
         
-        // Redirect to voting dashboard
+        //redirect to the voting dashboard
         navigate("/vote");
       }
     } catch (err) {
       console.error("Login error:", err);
       
-      // Check if the error is about email verification
+      //check if the error is about email verification
       if (err.message.includes('verify your email')) {
         setVerificationReminder(true);
       }
@@ -85,6 +85,7 @@ export default function Login({ setUser }) {
     }
   };
 
+  //method to resend the verification email for the verification process of new users
   const resendVerificationEmail = async () => {
     try {
       if (auth.currentUser) {
@@ -98,6 +99,7 @@ export default function Login({ setUser }) {
     }
   };
 
+  //method to verify the 2FA code for the 2FA verification process
   const handle2FAVerification = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -107,7 +109,7 @@ export default function Login({ setUser }) {
         throw new Error('User not authenticated');
       }
       
-      // Use the stored tempUserData that we saved during initial login
+      //use the stored tempUserData that we saved during initial login
       if (!tempUserData) {
         throw new Error('User session expired. Please login again.');
       }
@@ -117,10 +119,10 @@ export default function Login({ setUser }) {
       if (verified) {
         console.log("2FA verification successful, completing authentication");
         
-        // Use the temporarily stored user data after successful 2FA
-        setUser(tempUserData, false); // Signal that 2FA is complete
+        //use the temporarily stored user data after successful 2FA
+        setUser(tempUserData, false); //signal that 2FA is complete
         
-        // Navigate only after successful 2FA
+        //navigate only after successful 2FA
         navigate('/vote');
       } else {
         setError('Invalid 2FA code. Please try again.');
@@ -133,6 +135,7 @@ export default function Login({ setUser }) {
     }
   };
 
+  //front end display of the login page
   return (
     <div className="card flex justify-between">
       <form onSubmit={handleLogin} className="w-full pr-4">
