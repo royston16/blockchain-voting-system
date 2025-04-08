@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { generateMockVotes, analyzePerformance, identifyBottlenecks, getOptimizationPatterns } from '../blockchain/mockVoteGenerator';
 import blockchainService from '../blockchain/fabric-gateway';
+import ethblockchainService from '../blockchain/eth-gateway';
 
 //store metrics in sessionStorage to persist between navigation
 const loadStoredData = () => {
