@@ -50,6 +50,7 @@ export default function TestingDashboard() {
   const [showOptimizationModal, setShowOptimizationModal] = useState(false);
   const [selectedPattern, setSelectedPattern] = useState(null);
   const [bottlenecks, setBottlenecks] = useState([]);
+  const [ethServer, setEthServer] = useState([]);
   
   //on component mount, get the useMock setting from the blockchain service
   useEffect(() => {
