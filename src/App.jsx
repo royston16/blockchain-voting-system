@@ -10,7 +10,7 @@ import { checkAuthState, logoutVoter } from '../authentication/firebase'
 import { getDoc, doc } from 'firebase/firestore'
 import { db } from '../authentication/firebase'
 import SetUp2FA from './components/SetUp2FA'
-import blockchainService from './blockchain/fabric-gateway'
+import blockchainService from './blockchain/ethereum-service'
 import TestingDashboard from './components/TestingDashboard'
 import VoteReceiptViewer from './components/VoteReceiptViewer'
 

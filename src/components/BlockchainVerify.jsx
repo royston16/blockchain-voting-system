@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import BlockchainInfo from './BlockchainInfo'
-import blockchainService from '../blockchain/fabric-gateway'
+import blockchainService from '../blockchain/ethereum-service'
 
 //method to verify the blockchain integrity
 export default function BlockchainVerify() {
@@ -21,27 +21,56 @@ export default function BlockchainVerify() {
         //initialize the blockchain
         await blockchainService.initialize();
         
+        //get the connection status from the blockchain service
+        const connectionInfo = blockchainService.getConnectionInfo();
+        
+        //check if the user is connected to the ethereum network
+        if (!connectionInfo.connected) {
+          setLoadingMessage("Not connected to Ethereum network. Please connect your wallet.");
+          setVotes([]);
+          setValidation(false);
+          setLoading(false);
+          return;
+        }
+        
+        //check if the contract is deployed on the network
+        if (connectionInfo.contractAddress === 'Not deployed') {
+          setLoadingMessage("Contract not deployed. Please deploy a contract first.");
+          setVotes([]);
+          setValidation(false);
+          setLoading(false);
+          return;
+        }
+        
         //get all the votes from the blockchain
         const votesData = await blockchainService.getAllVotes();
         
-        //add the previous hash references (genesis block or previous block in the chain)
-        const votesWithHashes = votesData.map((vote, index) => ({
-          ...vote,
-          previousHash: index > 0 ? votesData[index - 1].txId : "Genesis block"
-        }));
+        //check if there are any votes on the blockchain
+        if (!votesData.votes || votesData.votes.length === 0) {
+          setLoadingMessage("No votes found on the blockchain.");
+          setVotes([]);
+          setValidation(true);
+          setLoading(false);
+          setShowChainData(true);
+          return;
+        }
         
-        setVotes(votesWithHashes);
+        //use the votes directly from the blockchain service
+        setVotes(votesData.votes);
         
-        //verify the chain
+        //verify the chain integrity
         const status = await blockchainService.verifyChain();
         setChainStatus(status);
         setValidation(status.isValid);
         
+        //set the loading message and show the chain data
         setLoadingMessage("Validation complete. See results below.");
         setShowChainData(true);
+
+        //if there is an error, set the loading message and validation status
       } catch (error) {
         console.error('Error verifying blockchain:', error);
-        setLoadingMessage("Error validating blockchain. Please try again.");
+        setLoadingMessage(`Error validating blockchain: ${error.message}`);
         setValidation(false);
       } finally {
         setLoading(false);
@@ -51,15 +80,18 @@ export default function BlockchainVerify() {
     verifyBlockchain();
   }, []);
 
+  //method to load more blocks from the blockchain
   const loadMoreBlocks = () => {
     setDisplayedBlocks(prev => Math.min(prev + 10, votes.length));
   };
 
+  //method to truncate the hash to 16 characters
   const truncateHash = (hash) => {
     if (!hash) return '';
     return hash.length > 16 ? `${hash.substring(0, 8)}...${hash.substring(hash.length - 8)}` : hash;
   };
 
+  //method to display the loading status
   let loadingStatus = loading ? (
     <div>
       <p>Loading... Chain is checking validation</p>
@@ -70,6 +102,7 @@ export default function BlockchainVerify() {
     </div>
   );
 
+  //set up the HTML for the chain data (frontend display)
   let chainData;
   if (votes.length === 0) {
     chainData = (
@@ -128,9 +161,10 @@ export default function BlockchainVerify() {
                       <div>
                         <div className="text-sm font-medium text-gray-500">Block Data</div>
                         <div className="mt-1 bg-gray-100 p-2 rounded text-sm">
-                          <div>Vote Cast: Candidate {vote.candidate}</div>
+                          <div>Vote Cast: {vote.candidate}</div>
                           <div>Timestamp: {new Date(vote.timestamp).toLocaleString()}</div>
                           <div>Block Number: {i + 1}</div>
+                          <div>Voter ID: {vote.voterId}</div>
                         </div>
                       </div>
                     </div>
