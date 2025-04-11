@@ -50,12 +50,12 @@ export default function VoteReceipt({ transactionData }) {
     let blockchainStatusMessage;
     if (hasBlockchainConfirmation) {
       blockchainStatusMessage = `This vote has been immutably recorded on the Ethereum blockchain.
-                                  Your vote cannot be altered or deleted.
-                                  This receipt serves as proof of your participation in the election.`;
+Your vote cannot be altered or deleted.
+This receipt serves as proof of your participation in the election.`;
     } else {
       blockchainStatusMessage = `This vote has been recorded in the system.
-                                  The transaction is pending blockchain confirmation.
-                                  Please check back later for full blockchain verification details.`;
+The transaction is pending blockchain confirmation.
+Please check back later for full blockchain verification details.`;
     }
     
     //format the candidate information correctly
