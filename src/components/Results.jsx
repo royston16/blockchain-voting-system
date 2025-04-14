@@ -9,63 +9,103 @@ export default function Results() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [displayedVotes, setDisplayedVotes] = useState(10)
+  const [refreshInterval, setRefreshInterval] = useState(null)
+  const [lastUpdated, setLastUpdated] = useState(new Date())
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true)
-        setError(null)
-        
-        //initialize the blockchain connection if needed
-        await blockchainService.initialize()
-        
-        //get the results and all votes
-        const resultsData = await blockchainService.getResults()
-        console.log('Results data:', resultsData)
-        
-        //handle the results format when it is available
-        if (resultsData && resultsData.results) {
-          setResults(resultsData.results)
-        } else {
-          //if there's no results property, use the whole object as results (default as 0)
-          setResults(resultsData || { "Total Votes": "0" })
-        }
-        
-        //get the votes from the blockchain only
-        const votesData = await blockchainService.getAllVotes()
-        console.log('Votes data from blockchain:', votesData)
-        
-        //handle the votes format
-        let blockchainVotes = []
-        
-        //if the votes data is an array, use it directly
-        if (votesData && Array.isArray(votesData.votes)) {
-          blockchainVotes = [...votesData.votes]
-        } else if (Array.isArray(votesData)) {
-          blockchainVotes = [...votesData]
-        }
-        
-        //sort the votes from oldest to newest based on timestamp
-        blockchainVotes.sort((a, b) => {
-          const timeA = new Date(a.timestamp).getTime();
-          const timeB = new Date(b.timestamp).getTime();
-          return timeA - timeB; //ascending order (oldest first)
-        });
-        
-        setVotes(blockchainVotes)
+  // Function to fetch data
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
       
-        //if there is an error, set the error message and clear the votes and results
-      } catch (error) {
-        console.error('Error fetching blockchain data:', error)
-        setError('Failed to load election results from the blockchain. Please try again later.')
-        setVotes([])
-        setResults({ "Total Votes": "0" })
-      } finally {
-        setLoading(false)
+      //initialize the blockchain connection if needed
+      await blockchainService.initialize()
+      
+      //get the results and all votes directly from the blockchain
+      const resultsData = await blockchainService.getResults()
+      console.log('Results data from blockchain:', resultsData)
+      
+      //handle the results format when it is available
+      if (resultsData && resultsData.results) {
+        setResults(resultsData.results)
+      } else {
+        //if there's no results property, use the whole object as results (default as 0)
+        setResults(resultsData || { "Total Votes": "0" })
       }
+      
+      //get the votes from the blockchain service - now includes both pending and confirmed
+      const votesData = await blockchainService.getAllVotes(1000, 0)
+      console.log('Votes data from blockchain service:', votesData)
+      
+      //handle the votes format
+      if (votesData && Array.isArray(votesData.votes)) {
+        setVotes(votesData.votes)
+      } else if (Array.isArray(votesData)) {
+        setVotes(votesData)
+      } else {
+        setVotes([])
+      }
+      
+      setLastUpdated(new Date())
+      setLoading(false)
+    } catch (err) {
+      console.error('Error fetching election results:', err)
+      setError(err.message || 'Failed to fetch results')
+      setLoading(false)
     }
+  }
+  
+  // Set up event listeners for vote data changes
+  const setupEventListeners = () => {
+    // Listen for vote confirmations
+    const handleVoteConfirmed = () => {
+      console.log('Vote confirmation detected, refreshing results');
+      fetchData();
+    };
     
+    // Listen for general vote data updates (from caches, other tabs, etc.)
+    const handleVoteDataUpdated = () => {
+      console.log('Vote data updated, refreshing results');
+      fetchData();
+    };
+    
+    // Listen for page visibility changes
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Results page became visible, refreshing data');
+        fetchData();
+      }
+    };
+    
+    // Add all event listeners
+    window.addEventListener('voteConfirmed', handleVoteConfirmed);
+    window.addEventListener('voteDataUpdated', handleVoteDataUpdated);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Clean up all listeners on unmount
+    return () => {
+      window.removeEventListener('voteConfirmed', handleVoteConfirmed);
+      window.removeEventListener('voteDataUpdated', handleVoteDataUpdated);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  };
+  
+  useEffect(() => {
+    // Initial data fetch
     fetchData()
+    
+    // Set up all event listeners
+    const cleanupListeners = setupEventListeners();
+    
+    // Set up refresh interval
+    const interval = setInterval(fetchData, 30000); // Refresh every 30 seconds
+    setRefreshInterval(interval);
+    
+    // Clean up on component unmount
+    return () => {
+      if (refreshInterval) clearInterval(refreshInterval);
+      cleanupListeners();
+    }
   }, [])
 
   //display the percentage of votes for each candidate
@@ -110,6 +150,16 @@ export default function Results() {
     }
   };
   
+  // Format the time for display
+  const formatTime = (time) => {
+    if (!time) return '';
+    try {
+      return new Date(time).toLocaleTimeString();
+    } catch (e) {
+      return time.toString();
+    }
+  };
+  
   //format the candidate name to be displayed
   const formatCandidate = (candidate) => {
     if (!candidate) return 'Unknown';
@@ -128,12 +178,26 @@ export default function Results() {
     return `Candidate ${candidate}`;
   };
 
+  // Handle manual refresh button click
+  const handleRefresh = () => {
+    console.log('Manual refresh requested');
+    fetchData();
+  };
+
   //front end display of the results
   return (
     <div className="w-full max-w-none">
       <BlockchainInfo />
       <div className="bg-white shadow-lg rounded-lg p-8">
-        <h2 className="text-2xl font-bold mb-6">Election Results</h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold">Election Results</h2>
+          <button 
+            onClick={handleRefresh}
+            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
+          >
+            Refresh Results
+          </button>
+        </div>
         
         {error && (
           <div className="mb-6 p-4 bg-red-100 border border-red-200 text-red-700 rounded-lg">
@@ -153,9 +217,9 @@ export default function Results() {
                 .filter(([candidate]) => candidate !== "Total Votes") // Filter out the total votes
                 .map(([candidate, votes]) => {
                   const candidateColor = 
-                    candidate === "Candidate A" ? "bg-blue-600" :
-                    candidate === "Candidate B" ? "bg-green-600" :
-                    candidate === "Candidate C" ? "bg-purple-600" : "bg-indigo-600";
+                    candidate === "Candidate A" || candidate === "A" ? "bg-blue-600" :
+                    candidate === "Candidate B" || candidate === "B" ? "bg-green-600" :
+                    candidate === "Candidate C" || candidate === "C" ? "bg-purple-600" : "bg-indigo-600";
                   
                   return (
                     <div key={candidate} className="bg-white border border-gray-200 rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow">
@@ -185,11 +249,16 @@ export default function Results() {
               <div className="text-center p-4 bg-white rounded-lg shadow">
                 <div className="text-sm text-gray-600 mb-1">Vote Records</div>
                 <div className="text-3xl font-bold text-indigo-600">{votes.length}</div>
+                {votes.filter(v => v.pending).length > 0 && (
+                  <div className="text-sm text-amber-600 mt-1">
+                    +{votes.filter(v => v.pending).length} pending
+                  </div>
+                )}
               </div>
               <div className="text-center p-4 bg-white rounded-lg shadow">
                 <div className="text-sm text-gray-600 mb-1">Last Update</div>
                 <div className="text-xl font-bold text-indigo-600">
-                  {new Date().toLocaleTimeString()}
+                  {formatTime(lastUpdated)}
                 </div>
               </div>
             </div>
@@ -209,69 +278,60 @@ export default function Results() {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[25%]">
+                        <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Transaction ID
                         </th>
-                        <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[20%]">
-                          Voter Hash
-                        </th>
-                        <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[20%]">
-                          Session ID
-                        </th>
-                        <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[15%]">
+                        <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Candidate
                         </th>
-                        <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[20%]">
+                        <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Timestamp
+                        </th>
+                        <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
                         </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      <tr>
-                        <td colSpan="5" className="p-0">
-                          <div className={votes.length > 10 ? "max-h-[400px] overflow-y-auto" : ""}>
-                            <table className="min-w-full divide-y divide-gray-200">
-                              <tbody>
-                                {votes.slice(0, displayedVotes).map((vote, index) => (
-                                  <tr key={index} className={`hover:bg-gray-50`}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono w-[25%]">
-                                      {formatId(vote.txId || vote.transactionId || vote.transactionHash)}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono w-[20%] text-indigo-600">
-                                      {formatId(vote.voterId, 'voter')}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono w-[20%] text-gray-500">
-                                      {formatId(vote.sessionId, 'session')}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm w-[15%]">
-                                      {formatCandidate(vote.candidate || vote.candidateId)}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 w-[20%]">
-                                      <div className="text-sm">
-                                        {new Date(vote.timestamp).toLocaleString()}
-                                        {vote.voteTimestamp && vote.voteTimestamp !== vote.timestamp && (
-                                          <div className="text-xs text-gray-400 mt-1">
-                                            Initiated: {new Date(vote.voteTimestamp).toLocaleString()}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </td>
-                      </tr>
+                      {votes.slice(0, displayedVotes).map((vote, index) => (
+                        <tr key={vote.txId || vote.transactionHash || index}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-mono text-gray-900">
+                              {formatId(vote.txId || vote.transactionHash, 'tx')}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              {formatCandidate(vote.candidateId || vote.candidate)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-500">
+                              {new Date(vote.timestamp).toLocaleString()}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {vote.pending ? (
+                              <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                Pending
+                              </span>
+                            ) : (
+                              <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                Confirmed
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
-
-                {votes.length > displayedVotes && (
-                  <div className="mt-4 text-center">
-                    <button
-                      onClick={loadMoreVotes}
-                      className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                
+                {displayedVotes < votes.length && (
+                  <div className="mt-6 text-center">
+                    <button 
+                      onClick={loadMoreVotes} 
+                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded text-gray-700"
                     >
                       Load More Votes
                     </button>
@@ -283,5 +343,5 @@ export default function Results() {
         )}
       </div>
     </div>
-  )
+  );
 }

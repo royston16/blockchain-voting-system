@@ -8,6 +8,7 @@ function TestingDashboard() {
   const [actionFeedback, setActionFeedback] = useState(null);
   const [deploying, setDeploying] = useState(false);
   const [electionInitialized, setElectionInitialized] = useState(false);
+  const [candidates, setCandidates] = useState("A,B,C");
   
   //update the connection info when the component loads
   useEffect(() => {
@@ -220,8 +221,13 @@ function TestingDashboard() {
   //handle clearing the saved contract address when the user clicks on "Clear Contract" button
   const handleClearContract = async () => {
     try {
-      //call the method to clear the contract address
-      blockchainService.clearContractAddress();
+      // Confirm with the user before proceeding
+      if (!window.confirm("This will clear the contract, all votes, and all vote receipts. This action cannot be undone. Are you sure you want to proceed?")) {
+        return;
+      }
+      
+      //call the method to clear the contract address and all data
+      const result = blockchainService.clearContractAddress();
       
       //reset the election status
       setElectionInitialized(false);
@@ -233,11 +239,19 @@ function TestingDashboard() {
       //update the connection info
       await updateConnectionInfo();
       
+      // Reset candidates if needed
+      setCandidates("A,B,C"); 
+      
       //set the action feedback
       setActionFeedback({
         type: 'success',
-        message: 'Contract address cleared and all vote data deleted. You can deploy a new contract now.'
+        message: result.message || 'Complete reset performed. All contract data, votes, and receipts have been deleted.'
       });
+      
+      // Force reload the page after a short delay to ensure all components reset properly
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
     } catch (error) {
       console.error('Failed to clear contract:', error);
       setActionFeedback({

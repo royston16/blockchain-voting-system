@@ -2,6 +2,10 @@ import { useState, useEffect } from 'react'
 import BlockchainInfo from './BlockchainInfo'
 import blockchainService from '../blockchain/ethereum-service'
 import VoteReceipt from './VoteReceipt'
+import { Link } from 'react-router-dom'
+
+// Development mode flag - set to true to allow multiple votes in frontend
+const DEV_MODE = true;
 
 //method to create a secure hash of the voter's email
 const createVoterHash = async (email) => {
@@ -33,6 +37,7 @@ export default function VotingDashboard({ user, votes, setVotes }) {
   const [sessionInfo, setSessionInfo] = useState(null)
   const [previousUser, setPreviousUser] = useState(null)
   const [voterHash, setVoterHash] = useState('') //store the voter hash
+  const [userVoteCount, setUserVoteCount] = useState(0) // Track how many votes user has cast
   
   //the candidates for the election
   const candidates = [
@@ -53,6 +58,7 @@ export default function VotingDashboard({ user, votes, setVotes }) {
       setStatusMessage('');
       setSessionInfo(null);
       setVoterHash(''); //reset the voter hash
+      setUserVoteCount(0);
     }
     
     //generate the voter hash when the user changes
@@ -69,6 +75,29 @@ export default function VotingDashboard({ user, votes, setVotes }) {
     }
     
     setPreviousUser(user);
+    
+    // Listen for contract data cleared event
+    const handleContractDataCleared = () => {
+      console.log('Contract data cleared event received, resetting voting dashboard');
+      // Reset all voting state
+      setHasVoted(false);
+      setSelectedCandidate('');
+      setTransactionData(null);
+      setShowReceipt(false);
+      setVotingStatus('ready');
+      setStatusMessage('');
+      setSessionInfo(null);
+      setVoterHash('');
+      setUserVoteCount(0);
+    };
+    
+    // Add event listener
+    window.addEventListener('contractDataCleared', handleContractDataCleared);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('contractDataCleared', handleContractDataCleared);
+    };
   }, [user, previousUser]);
 
   //initialize the blockchain service and check the vote status when the component mounts
@@ -76,7 +105,6 @@ export default function VotingDashboard({ user, votes, setVotes }) {
     const checkVoteStatus = async () => {
       try {
         await blockchainService.initialize();
-        const response = await blockchainService.getAllVotes();
         
         //wait until the voter hash is generated and the user is logged in
         if (!voterHash && user?.email) {
@@ -84,58 +112,43 @@ export default function VotingDashboard({ user, votes, setVotes }) {
           setVoterHash(hash);
         }
         
-        //extract the votes array from the response
-        const allVotes = response.votes || [];
-        
-        //check for existing votes by this user
-        const userVotes = allVotes.filter(vote => {
-          //check if this hash or email has already voted
-          return (
-            (vote.voterId && vote.voterId === voterHash) || 
-            (vote.originalVoter && vote.originalVoter === user.email) ||
-            (vote.voterId && vote.voterId.includes(user.email))
-          );
-        });
-        
-        if (userVotes.length > 0) {
-          setHasVoted(true);
-          setStatusMessage('You have already cast your vote.');
-          setVotingStatus('completed');
+        // Get user's vote receipts
+        if (user?.email) {
+          const userReceipts = blockchainService.getVoteReceiptsForVoter(user.email);
+          setUserVoteCount(userReceipts.length);
           
-          //show the most recent vote's receipt
-          const mostRecentVote = userVotes[userVotes.length - 1];
-          setTransactionData(mostRecentVote);
-          setShowReceipt(true);
-          
-          //set the session info from the vote, generate session ID if not present
-          setSessionInfo({
-            voterId: voterHash || mostRecentVote.voterId,
-            sessionId: mostRecentVote.sessionId || `session-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-            timestamp: mostRecentVote.timestamp || Date.now()
-          });
-        } else {
-          //if the user has not voted - ensure clean state and create a new session ID
-          setHasVoted(false);
-          setStatusMessage('');
-          setVotingStatus('ready');
-          
-          //generate a new session ID for this voting session
-          setSessionInfo({
-            voterId: voterHash || user.email,
-            sessionId: `session-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-            timestamp: Date.now()
-          });
+          // Check for existing votes by this user's hash or email
+          if (userReceipts.length > 0 && !DEV_MODE) {
+            // In production mode, show that user has already voted
+            setHasVoted(true);
+            setStatusMessage('You have already cast your vote.');
+            setVotingStatus('completed');
+            
+            //show the most recent vote's receipt
+            const mostRecentVote = userReceipts[0]; // Already sorted newest first
+            setTransactionData(mostRecentVote);
+            setShowReceipt(true);
+            
+            //set the session info from the vote, generate session ID if not present
+            setSessionInfo({
+              voterId: voterHash || mostRecentVote.voterId,
+              sessionId: mostRecentVote.sessionId || `session-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+              timestamp: mostRecentVote.timestamp || Date.now()
+            });
+          } else if (userReceipts.length > 0 && DEV_MODE) {
+            // In development mode, show receipt of last vote but allow new votes
+            console.log(`DEV MODE: User has ${userReceipts.length} previous votes but allowing new votes`);
+            // Set the most recent vote for display but don't block new votes
+            const mostRecentVote = userReceipts[0];
+            setTransactionData(mostRecentVote);
+            // Don't set hasVoted to true so user can vote again
+            setVotingStatus('ready');
+            setStatusMessage('');
+          }
         }
       } catch (error) {
         console.error('Error checking vote status:', error);
-        setStatusMessage('Error checking vote status. Please try again.');
-        
-        //even on error, create a session ID
-        setSessionInfo({
-          voterId: voterHash || user.email,
-          sessionId: `session-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-          timestamp: Date.now()
-        });
+        setStatusMessage('Could not check voting status. Please try again later.');
       }
     };
     
@@ -152,7 +165,8 @@ export default function VotingDashboard({ user, votes, setVotes }) {
       return;
     }
     
-    if (hasVoted) {
+    // Skip the hasVoted check in development mode
+    if (hasVoted && !DEV_MODE) {
       setStatusMessage('You have already cast your vote');
       return;
     }
@@ -169,6 +183,12 @@ export default function VotingDashboard({ user, votes, setVotes }) {
     
     try {
       console.log('Starting vote submission for user with hash:', currentVoterHash);
+      
+      // In DEV_MODE, generate a new voterHash for each vote to bypass blockchain contract's duplicate check
+      if (DEV_MODE && userVoteCount > 0) {
+        currentVoterHash = `${currentVoterHash}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+        console.log('DEV MODE: Generated new voter hash to bypass contract duplicate check:', currentVoterHash);
+      }
       
       //make sure we have a session ID to use
       const currentSessionId = sessionInfo?.sessionId || `session-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -196,6 +216,9 @@ export default function VotingDashboard({ user, votes, setVotes }) {
           errorMsg = 'Transaction was rejected in your wallet. Please try again when ready.';
         } else if (errorMsg.includes('Contract not deployed')) {
           errorMsg = 'Voting contract is not deployed yet. Please wait for the administrator to set up the voting system.';
+        } else if (errorMsg.includes('Voter has already cast a vote')) {
+          // This should only happen if DEV_MODE is false, but handling just in case
+          errorMsg = 'This voter has already cast a vote. This is likely a blockchain constraint.';
         }
         
         setStatusMessage(errorMsg);
@@ -215,25 +238,6 @@ export default function VotingDashboard({ user, votes, setVotes }) {
       setTransactionData(transaction);
       setShowReceipt(true);
       
-      //save the vote to localStorage for persistent history
-      try {
-        //get the existing votes from localStorage
-        const savedVotesString = localStorage.getItem('userVotes');
-        const savedVotes = savedVotesString ? JSON.parse(savedVotesString) : [];
-        
-        //add the current timestamp when the vote was saved
-        transaction.savedAt = new Date().toISOString();
-        
-        //add the new vote to the array
-        savedVotes.push(transaction);
-        
-        //save the updated array back to localStorage
-        localStorage.setItem('userVotes', JSON.stringify(savedVotes));
-        console.log('Vote saved to localStorage for history');
-      } catch (storageError) {
-        console.error('Failed to save vote to localStorage:', storageError);
-      }
-      
       //store the session information for display
       setSessionInfo({
         voterId: currentVoterHash,
@@ -241,10 +245,21 @@ export default function VotingDashboard({ user, votes, setVotes }) {
         timestamp: transaction.timestamp || Date.now()
       });
       
+      // Explicitly save the vote receipt
+      blockchainService.saveVoteReceipt(transaction, user.email);
+      
+      // Update the user vote count
+      setUserVoteCount(prev => prev + 1);
+      
       //update the states to reflect the successful vote
       setVotingStatus('completed');
       setSelectedCandidate('');
-      setHasVoted(true);
+      
+      // Only set hasVoted to true if not in development mode
+      if (!DEV_MODE) {
+        setHasVoted(true);
+      }
+      
       setStatusMessage('Your vote has been successfully recorded on the blockchain!');
       
     } catch (error) {
@@ -264,12 +279,33 @@ export default function VotingDashboard({ user, votes, setVotes }) {
     }
   }
 
+  // Function to reset vote state (used in DEV_MODE to allow voting again)
+  const resetVoteState = () => {
+    setShowReceipt(false);
+    setVotingStatus('ready');
+    setStatusMessage('');
+    setSelectedCandidate('');
+  };
+
   //the front end interface for the voting dashboard
   return (
     <div>
       <BlockchainInfo />
       <div className="card">
-        <h2 className="text-2xl font-bold mb-6">Cast Your Vote</h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold">Cast Your Vote</h2>
+          {userVoteCount > 0 && (
+            <Link 
+              to="/receipts" 
+              className="text-indigo-600 hover:text-indigo-800 flex items-center"
+            >
+              <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              View Your Vote Receipts ({userVoteCount})
+            </Link>
+          )}
+        </div>
         
         {/*status message for the voter to ensure the integrity of their vote*/}
         {statusMessage && (
@@ -280,86 +316,130 @@ export default function VotingDashboard({ user, votes, setVotes }) {
             'bg-gray-100 text-gray-700 border border-gray-200'
           }`}>
             <p className="text-center font-medium">{statusMessage}</p>
-          </div>
-        )}
-        
-        {/* Only show the "already voted" message if there's no other status message */}
-        {hasVoted && !statusMessage && (
-          <div className="mb-6 p-4 bg-red-100 text-red-700 rounded-lg border border-red-200 text-center">
-            You have already cast a vote in this election
-          </div>
-        )}
-        
-        {/* Always show session info since we now generate it for all users */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <h3 className="text-lg font-semibold mb-2">Voting Session Information</h3>
-          <div className="grid gap-2 text-sm">
-            <div>
-              <span className="font-medium">Session ID: </span>
-              <code className="bg-white px-2 py-1 rounded">{sessionInfo?.sessionId || 'Not available'}</code>
-            </div>
-            <div>
-              <span className="font-medium">Voter Hash: </span>
-              <code className="bg-white px-2 py-1 rounded">{sessionInfo?.voterId || user?.email || 'Not available'}</code>
-            </div>
-            <div>
-              <span className="font-medium">Session Time: </span>
-              <span>{sessionInfo?.timestamp ? new Date(sessionInfo.timestamp).toLocaleString() : new Date().toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          {candidates.map(candidate => (
-            <div 
-              key={candidate.id} 
-              className={`p-6 rounded-lg border-2 transition-all duration-200 ${
-                selectedCandidate === candidate.id 
-                  ? 'border-indigo-500 bg-indigo-50' 
-                  : 'border-gray-200 hover:border-indigo-200'
-              } ${hasVoted ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-              onClick={() => !hasVoted && setSelectedCandidate(candidate.id)}
-            >
-              <h3 className="text-xl font-semibold mb-2">{candidate.name}</h3>
-              <p className="text-indigo-600 font-medium mb-3">{candidate.party}</p>
-              <p className="text-gray-600 mb-4">{candidate.description}</p>
-              <div className="flex items-center">
-                <input 
-                  type="radio"
-                  name="candidate"
-                  value={candidate.id}
-                  checked={selectedCandidate === candidate.id}
-                  onChange={() => !hasVoted && setSelectedCandidate(candidate.id)}
-                  disabled={hasVoted}
-                  className="w-4 h-4 text-indigo-600"
-                />
-                <span className="ml-2 text-gray-700">Select</span>
+            
+            {votingStatus === 'completed' && (
+              <div className="text-center mt-2">
+                <Link 
+                  to="/receipts" 
+                  className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                >
+                  View all your vote receipts
+                </Link>
+                
+                {/* In DEV_MODE, show button to vote again after successful vote */}
+                {DEV_MODE && (
+                  <button
+                    onClick={resetVoteState}
+                    className="ml-4 text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                  >
+                    Cast another vote (DEV MODE)
+                  </button>
+                )}
               </div>
-            </div>
-          ))}
-        </div>
+            )}
+          </div>
+        )}
         
-        <div className="flex justify-center">
-          <button 
-            className={`px-8 py-3 rounded-lg font-medium transition-all duration-200 ${
-              hasVoted || votingStatus === 'processing' || !selectedCandidate
-                ? 'bg-gray-300 cursor-not-allowed'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-            }`}
+        {/* Only show the "already voted" message if there's no other status message and NOT in DEV_MODE */}
+        {hasVoted && !statusMessage && !DEV_MODE && (
+          <div className="mb-6 p-4 bg-red-100 text-red-700 rounded-lg border border-red-200 text-center">
+            <p className="mb-2">You have already cast a vote in this election</p>
+            <Link 
+              to="/receipts" 
+              className="text-indigo-700 hover:text-indigo-900 text-sm font-medium"
+            >
+              View your vote receipt
+            </Link>
+          </div>
+        )}
+        
+        {/* Show candidate selection if in DEV_MODE or if the user hasn't voted */}
+        {(DEV_MODE || !hasVoted) && !showReceipt && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {candidates.map((candidate) => (
+              <div
+                key={candidate.id}
+                className={`border p-4 rounded-lg cursor-pointer transition-all ${
+                  selectedCandidate === candidate.id
+                    ? 'border-indigo-500 bg-indigo-50 shadow-md'
+                    : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50'
+                }`}
+                onClick={() => setSelectedCandidate(candidate.id)}
+              >
+                <div className="flex items-center mb-3">
+                  <div
+                    className={`w-5 h-5 rounded-full mr-3 border ${
+                      selectedCandidate === candidate.id
+                        ? 'border-indigo-600 bg-indigo-600'
+                        : 'border-gray-300'
+                    }`}
+                  >
+                    {selectedCandidate === candidate.id && (
+                      <div className="flex items-center justify-center h-full">
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-lg font-medium">{candidate.name}</div>
+                </div>
+                <div className="pl-8">
+                  <div className="text-sm text-gray-600 mb-2">{candidate.party}</div>
+                  <p className="text-sm text-gray-700">{candidate.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        
+        {/* Show confirm button if in DEV_MODE or if the user hasn't voted */}
+        {(DEV_MODE || !hasVoted) && !showReceipt && (
+          <button
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed"
             onClick={handleVote}
-            disabled={hasVoted || votingStatus === 'processing' || !selectedCandidate}
+            disabled={!selectedCandidate || votingStatus === 'processing'}
           >
-            {votingStatus === 'processing' ? 'Processing...' : 
-             hasVoted ? 'Vote Submitted' : 'Submit Vote'}
+            {votingStatus === 'processing' ? 'Processing...' : 'Confirm Vote'}
           </button>
-        </div>
-
+        )}
+        
+        {/* Show the receipt after voting */}
         {showReceipt && transactionData && (
-          <div className="mt-8 p-6 bg-white border-2 border-indigo-200 rounded-lg shadow-lg">
+          <div className="mt-4 pt-6 border-t border-gray-200">
             <VoteReceipt transactionData={transactionData} />
+            
+            {/* In DEV_MODE, show a button to cast another vote */}
+            {DEV_MODE && (
+              <div className="mt-4 text-center">
+                <button
+                  onClick={resetVoteState}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded"
+                >
+                  Cast Another Vote (DEV MODE)
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
+      
+      {/* DEV_MODE indicator */}
+      {DEV_MODE && (
+        <div className="mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg text-yellow-800">
+          <div className="flex items-center">
+            <svg className="w-5 h-5 mr-2 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="font-bold">Development Mode Active:</span>
+            <span className="ml-2">Multiple voting is enabled for testing purposes only.</span>
+          </div>
+        </div>
+      )}
     </div>
-  )
+  );
 }

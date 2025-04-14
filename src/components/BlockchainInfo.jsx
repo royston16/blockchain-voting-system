@@ -31,12 +31,21 @@ export default function BlockchainInfo() {
         
         //if the contract is deployed, get the votes and chain status
         if (contractDeployed) {
-          const results = await blockchainService.getResults();
-          totalVotes = results.totalVotes || '0';
-          
-          //get the verification status from the blockchain service
-          const chainStatus = await blockchainService.verifyChain();
-          chainStatusValue = chainStatus.verified ? 'Verified' : 'Unverified';
+          try {
+            const results = await blockchainService.getResults();
+            console.log('BlockchainInfo - Results received:', results);
+            totalVotes = results.totalVotes || '0';
+            
+            //get the verification status from the blockchain service
+            const chainStatus = await blockchainService.verifyChain();
+            console.log('BlockchainInfo - Chain status:', chainStatus);
+            chainStatusValue = chainStatus.verified ? 'Verified' : 'Unverified';
+            
+          } catch (contractError) {
+            console.error('Error fetching contract data:', contractError);
+            chainStatusValue = 'Error';
+            totalVotes = '0';
+          }
         } else {
           console.log('Contract not deployed - skipping votes and chain status requests');
         }
@@ -63,8 +72,8 @@ export default function BlockchainInfo() {
     //initial update of the blockchain information
     updateBlockchainInfo();
 
-    //set up periodic updates (every 5 seconds)
-    const interval = setInterval(updateBlockchainInfo, 5000);
+    //set up periodic updates (every 10 seconds to reduce errors)
+    const interval = setInterval(updateBlockchainInfo, 10000);
     return () => clearInterval(interval);
   }, []);
 

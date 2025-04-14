@@ -6,6 +6,7 @@ import Login from './components/Login'
 import VotingDashboard from './components/VotingDashboard'
 import Results from './components/Results'
 import BlockchainVerify from './components/BlockchainVerify'
+import BlockchainStructure from './components/BlockchainStructure'
 import { checkAuthState, logoutVoter } from '../authentication/firebase'
 import { getDoc, doc } from 'firebase/firestore'
 import { db } from '../authentication/firebase'
@@ -29,7 +30,6 @@ window.firstBlockHash = "9ab0a3600a1eba7002afccb2931ba5e7";
                       
 function App() {
   const [user, setUser] = useState(null)
-  const [votes, setVotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [pending2FA, setPending2FA] = useState(false)
 
@@ -158,7 +158,7 @@ function App() {
             path="/vote" 
             element={
               <ProtectedRoute>
-                <VotingDashboard user={user} votes={votes} setVotes={setVotes} />
+                <VotingDashboard user={user} />
               </ProtectedRoute>
             } 
           />
@@ -166,7 +166,7 @@ function App() {
             path="/results" 
             element={
               <ProtectedRoute>
-                <Results votes={votes} />
+                <Results />
               </ProtectedRoute>
             } 
           />
@@ -174,7 +174,15 @@ function App() {
             path="/chain" 
             element={
               <ProtectedRoute>
-                <BlockchainVerify votes={votes} />
+                <BlockchainVerify />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/blockchain-structure" 
+            element={
+              <ProtectedRoute>
+                <BlockchainStructure />
               </ProtectedRoute>
             } 
           />
@@ -202,7 +210,6 @@ function App() {
               </ProtectedRoute>
             } 
           />
-          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </Router>
