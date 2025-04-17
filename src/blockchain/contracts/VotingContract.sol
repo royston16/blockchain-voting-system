@@ -25,6 +25,7 @@ contract VotingContract {
     
     //events
     event VoteCast(string voterHash, string candidateId, uint256 timestamp, uint256 blockNumber);
+    event BatchVotesCast(uint256 batchSize, uint256 timestamp, uint256 blockNumber);
     event ElectionClosed(string electionId, uint256 timestamp, uint256 totalVotes);
     
     //modifiers
@@ -95,6 +96,71 @@ contract VotingContract {
         
         //emit event
         emit VoteCast(_voterHash, _candidateId, block.timestamp, block.number);
+        
+        return true;
+    }
+    
+    //batch cast votes - process multiple votes in a single transaction
+    function batchCastVotes(
+        string[] memory _voterHashes,
+        string[] memory _candidateIds,
+        string[] memory _sessionIds
+    ) public onlyDuringElection returns (bool) {
+        // Check that all arrays have the same length
+        require(_voterHashes.length == _candidateIds.length, "Input arrays must have the same length");
+        require(_voterHashes.length == _sessionIds.length, "Input arrays must have the same length");
+        require(_voterHashes.length > 0, "No votes provided");
+        
+        uint256 successfulVotes = 0;
+        
+        // Process each vote in the batch
+        for (uint i = 0; i < _voterHashes.length; i++) {
+            string memory voterHash = _voterHashes[i];
+            string memory candidateId = _candidateIds[i];
+            string memory sessionId = _sessionIds[i];
+            
+            // Skip votes from voters who have already voted rather than failing the entire batch
+            if (hasVoted[voterHash]) {
+                continue;
+            }
+            
+            // Check if candidate is valid
+            bool validCandidate = false;
+            for (uint j = 0; j < candidates.length; j++) {
+                if (keccak256(abi.encodePacked(candidates[j])) == keccak256(abi.encodePacked(candidateId))) {
+                    validCandidate = true;
+                    break;
+                }
+            }
+            
+            // Skip invalid candidates rather than failing the entire batch
+            if (!validCandidate) {
+                continue;
+            }
+            
+            // Record vote to the contract
+            votes.push(Vote({
+                voterHash: voterHash,
+                candidateId: candidateId,
+                sessionId: sessionId,
+                timestamp: block.timestamp,
+                blockNumber: block.number
+            }));
+            
+            // Mark voter as having voted
+            hasVoted[voterHash] = true;
+            
+            // Individual vote event (optional - can be removed to save gas)
+            emit VoteCast(voterHash, candidateId, block.timestamp, block.number);
+            
+            successfulVotes++;
+        }
+        
+        // Require at least one successful vote
+        require(successfulVotes > 0, "No valid votes in batch");
+        
+        // Emit a batch event
+        emit BatchVotesCast(successfulVotes, block.timestamp, block.number);
         
         return true;
     }

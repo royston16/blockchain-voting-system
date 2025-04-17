@@ -116,6 +116,36 @@ const votingContractABI = VotingContractArtifact.abi || [
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  // Add batchCastVotes function to the ABI
+  {
+    "inputs": [
+      {
+        "internalType": "string[]",
+        "name": "_voterHashes",
+        "type": "string[]"
+      },
+      {
+        "internalType": "string[]",
+        "name": "_candidateIds",
+        "type": "string[]"
+      },
+      {
+        "internalType": "string[]",
+        "name": "_sessionIds",
+        "type": "string[]"
+      }
+    ],
+    "name": "batchCastVotes",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
   }
 ];
 
@@ -1077,8 +1107,8 @@ export class BlockchainService {
         
         return votesData;
       } catch (error) {
-        // Log as info instead of error to avoid flooding console with red errors
-        console.log('Could not get votes from contract, using fallback:', error.message);
+        // Log as info instead of error
+        console.log('Using fallback vote data:', error.message);
         
         // Try to read from cache first
         try {
@@ -1095,13 +1125,12 @@ export class BlockchainService {
           console.warn('Error reading cached votes:', cacheError);
         }
         
-        // Return combined in-memory votes as fallback
+        // Return in-memory votes as fallback
         const allVotes = [...this.confirmedVotes, ...this.pendingVotes];
         return {
           votes: allVotes,
           totalVotes: allVotes.length.toString(),
-          hasMore: false,
-          error: error.message
+          hasMore: false
         };
       }
     } catch (error) {
@@ -1113,7 +1142,7 @@ export class BlockchainService {
         const cachedVotes = localStorage.getItem(CACHE_KEYS.VOTE_DATA);
         if (cachedVotes) {
           const parsedVotes = JSON.parse(cachedVotes);
-      return {
+          return {
             votes: parsedVotes,
             totalVotes: parsedVotes.length.toString(),
             hasMore: false
@@ -1128,8 +1157,7 @@ export class BlockchainService {
       return {
         votes: allVotes,
         totalVotes: allVotes.length.toString(),
-        hasMore: false,
-        error: error.message
+        hasMore: false
       };
     }
   }
@@ -1420,7 +1448,7 @@ export class BlockchainService {
    */
   async loadSavedContract() {
     try {
-      if (!this.isInitialized() || !this.contractAddress) {
+      if (!this.initialized || !this.contractAddress) {
         console.log('No saved contract address found or service not initialized');
         return false;
       }
@@ -1431,14 +1459,14 @@ export class BlockchainService {
       this.contract = new ethers.Contract(
         this.contractAddress,
         this.contractABI,
-        this.getSigner() || this.provider
+        this.signer || this.provider
       );
       
       //validate the contract exists and is of the correct type by calling a view function
       try {
-        //call a simple view function to verify the contract
-        const isActive = await this.contract.isActive();
-        console.log('Contract validated successfully, isActive:', isActive);
+        //call a view function to verify the contract
+        const election = await this.contract.election();
+        console.log('Contract validated successfully, election:', election);
         return true;
       } catch (error) {
         console.warn('Failed to validate contract, may be incorrect address or network:', error);
@@ -1450,12 +1478,14 @@ export class BlockchainService {
     }
   }
 
-  // New method to track transaction status
+  // New method to track transaction status with cancellation detection
   _listenForTransaction(txHash) {
     if (!this.provider) {
       console.warn('No provider available to listen for transaction confirmations');
       return;
     }
+    
+    let cancellationCheckCounter = 0;
     
     const checkInterval = setInterval(async () => {
       try {
@@ -1501,6 +1531,34 @@ export class BlockchainService {
               window.dispatchEvent(new CustomEvent('voteDataUpdated'));
             }
           }
+        } else {
+          // Check for transaction cancellation or replacement
+          cancellationCheckCounter++;
+          
+          // Every 5 checks (10 seconds), do a cancellation check
+          if (cancellationCheckCounter >= 5) {
+            cancellationCheckCounter = 0;
+            
+            try {
+              // Get transaction from mempool
+              const tx = await this.provider.getTransaction(txHash);
+              
+              // If transaction is no longer in mempool after a reasonable time
+              // (tx will be null if it's not found in the mempool)
+              if (!tx && this.pendingTransactions.has(txHash)) {
+                console.log(`Transaction ${txHash} appears to have been cancelled or replaced`);
+                
+                // Mark the transaction as cancelled
+                await this._handleCancelledTransaction(txHash);
+                
+                // Clean up the interval
+                clearInterval(checkInterval);
+                this.transactionListeners.delete(txHash);
+              }
+            } catch (error) {
+              console.log(`Error checking transaction status for cancellation: ${error.message}`);
+            }
+          }
         }
       } catch (error) {
         console.error(`Error checking transaction ${txHash}:`, error);
@@ -1515,8 +1573,96 @@ export class BlockchainService {
         clearInterval(this.transactionListeners.get(txHash));
         this.transactionListeners.delete(txHash);
         console.warn(`Transaction ${txHash} listener timed out after 10 minutes`);
+        
+        // If transaction is still pending after timeout, mark as cancelled/failed
+        if (this.pendingTransactions.has(txHash)) {
+          this._handleCancelledTransaction(txHash, "Transaction timed out");
+        }
       }
     }, 10 * 60 * 1000);
+  }
+  
+  /**
+   * Handle a cancelled or replaced transaction
+   * @private
+   * @param {string} txHash - Hash of the cancelled transaction
+   * @param {string} reason - Reason for cancellation (optional)
+   */
+  async _handleCancelledTransaction(txHash, reason = "Transaction cancelled") {
+    if (!this.pendingTransactions.has(txHash)) {
+      return; // Nothing to do if transaction is not pending
+    }
+    
+    console.log(`Handling cancelled transaction ${txHash}: ${reason}`);
+    
+    // Get the vote data for this transaction
+    const voteData = this.pendingTransactions.get(txHash);
+    
+    // Update status to cancelled
+    voteData.pending = false;
+    voteData.cancelled = true;
+    voteData.status = "cancelled";
+    voteData.error = reason;
+    voteData.cancellationTime = new Date().toISOString();
+    
+    // Remove from pending votes
+    this.pendingVotes = this.pendingVotes.filter(v => v.transactionHash !== txHash);
+    this.pendingTransactions.delete(txHash);
+    
+    // Update receipt with cancellation info
+    this.saveVoteReceipt({
+      ...voteData,
+      confirmed: false,
+      cancelled: true,
+      status: "cancelled",
+      error: reason,
+      cancellationTime: new Date().toISOString()
+    }, voteData.email || voteData.originalVoter);
+    
+    // Update cached data
+    this._cacheVoteData(null, { votes: [...this.confirmedVotes, ...this.pendingVotes] });
+    
+    // Trigger events
+    window.dispatchEvent(new CustomEvent('voteTransactionCancelled', { 
+      detail: { 
+        txHash, 
+        vote: voteData, 
+        reason 
+      } 
+    }));
+    window.dispatchEvent(new CustomEvent('voteDataUpdated'));
+    
+    return voteData;
+  }
+  
+  /**
+   * Manually mark a pending transaction as cancelled
+   * @param {string} txHash - Transaction hash to cancel
+   * @returns {Promise<Object>} Result of cancellation
+   */
+  async cancelPendingVote(txHash) {
+    if (!this.pendingTransactions.has(txHash)) {
+      return { 
+        success: false, 
+        error: "Transaction not found or not pending" 
+      };
+    }
+    
+    try {
+      const voteData = await this._handleCancelledTransaction(txHash, "Manually cancelled by user");
+      
+      return {
+        success: true,
+        message: "Vote transaction marked as cancelled",
+        vote: voteData
+      };
+    } catch (error) {
+      console.error("Error cancelling vote:", error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
   }
 
   // Add methods to get pending and confirmed votes
@@ -1759,8 +1905,9 @@ export class BlockchainService {
     // Extract options with defaults
     const chunkSize = options.chunkSize || 100; // Process up to 100 votes per transaction
     const onProgress = options.onProgress || (() => {}); // No-op default
+    const optimizeGas = options.optimizeGas !== undefined ? options.optimizeGas : true; // Default to gas optimization
     
-    console.log(`Batch processing ${votes.length} votes with chunk size ${chunkSize}`);
+    console.log(`Batch processing ${votes.length} votes with chunk size ${chunkSize} and gas optimization ${optimizeGas ? 'enabled' : 'disabled'}`);
     
     // Check if contract is deployed
     if (!this.contract) {
@@ -1794,13 +1941,20 @@ export class BlockchainService {
       
       for (const chunk of chunks) {
         try {
-          // Process this chunk of votes
-          const batchTxPromises = [];
-          const chunkResults = [];
+          // Prepare arrays for batch processing
+          const voterHashes = [];
+          const candidateIds = [];
+          const sessionIds = [];
+          const voteDataArray = [];
           
-          // Store the pending votes in memory
+          // Format data for batching
           for (const vote of chunk) {
             const { voterHash, candidateId, sessionId, email } = vote;
+            
+            // Add to arrays for batch processing
+            voterHashes.push(voterHash);
+            candidateIds.push(candidateId);
+            sessionIds.push(sessionId);
             
             // Generate transaction ID
             const txId = this._generateTxId();
@@ -1808,61 +1962,71 @@ export class BlockchainService {
             // Create vote object and add to pending votes
             const voteData = {
               voterId: voterHash,
-              voterHash: voterHash, // Ensure consistency with both property names
+              voterHash: voterHash,
               candidateId: candidateId,
               sessionId: sessionId,
               timestamp: new Date().toISOString(),
               txId: txId,
               pending: true,
               voterEmail: email,
-              email: email // Ensure consistency with both property names
+              email: email
             };
             
             this.pendingVotes.push(voteData);
-            
-            // Add the promise to the batch
-            batchTxPromises.push(
-              this.contract.castVote(voterHash, candidateId, sessionId)
-            );
-            
-            // Store the original data for later reference
-            chunkResults.push(voteData);
+            voteDataArray.push(voteData);
           }
           
-          // Execute all transactions in this chunk with a single MetaMask confirmation
-          const batchTx = await Promise.all(batchTxPromises);
+          console.log(`Using batchCastVotes function to process ${voteDataArray.length} votes in a single transaction`);
           
-          // Process transaction receipts for this chunk
-          for (let i = 0; i < batchTx.length; i++) {
-            const tx = batchTx[i];
-            const vote = chunkResults[i];
-            
+          // Call the contract's batchCastVotes function
+          const tx = await this.contract.batchCastVotes(
+            voterHashes,
+            candidateIds,
+            sessionIds,
+            { 
+              // Gas limit calculation based on optimization setting
+              gasLimit: optimizeGas 
+                ? Math.min(8000000, 200000 + 50000 * voteDataArray.length) // Optimized gas (lower)
+                : Math.min(12000000, 300000 + 70000 * voteDataArray.length) // Conservative gas (higher)
+            }
+          );
+          
+          console.log('Batch transaction sent:', tx.hash);
+          
+          // Wait for the transaction to be mined
+          const receipt = await tx.wait();
+          console.log('Batch transaction confirmed in block:', receipt.blockNumber);
+          
+          // Process all votes in the batch with the same transaction receipt
+          for (const voteData of voteDataArray) {
             // Update the vote with transaction data
-            vote.transactionHash = tx.hash;
-            vote.pending = false;
+            voteData.transactionHash = tx.hash;
+            voteData.pending = false;
+            voteData.blockNumber = receipt.blockNumber;
             
             // Save vote receipt
             this.saveVoteReceipt({
-              txId: vote.txId,
+              txId: voteData.txId,
               transactionHash: tx.hash,
-              voterHash: vote.voterId,
-              voterId: vote.voterHash, // Ensure consistency
-              candidateId: vote.candidateId,
-              candidate: vote.candidateId, // For compatibility
-              sessionId: vote.sessionId,
-              timestamp: vote.timestamp,
+              voterHash: voteData.voterId,
+              voterId: voteData.voterHash,
+              candidateId: voteData.candidateId,
+              candidate: voteData.candidateId,
+              sessionId: voteData.sessionId,
+              timestamp: voteData.timestamp,
               status: "confirmed",
-              voterEmail: vote.voterEmail,
-              email: vote.email // Ensure consistency
-            }, vote.voterEmail || vote.email);
+              blockNumber: receipt.blockNumber,
+              voterEmail: voteData.voterEmail,
+              email: voteData.email
+            }, voteData.voterEmail || voteData.email);
             
             // Update in-memory state
-            this.pendingVotes = this.pendingVotes.filter(pv => pv.txId !== vote.txId);
-            this.confirmedVotes.push(vote);
+            this.pendingVotes = this.pendingVotes.filter(pv => pv.txId !== voteData.txId);
+            this.confirmedVotes.push(voteData);
           }
           
           // Add results from this chunk
-          results.push(...chunkResults);
+          results.push(...voteDataArray);
           
           // Update progress
           processedVotes += chunk.length;
@@ -1934,7 +2098,7 @@ export class BlockchainService {
       
       return {
         success: true,
-        message: `Successfully cast ${results.length} votes in ${processedChunks} chunks`,
+        message: `Successfully cast ${results.length} votes in ${processedChunks} chunks with a single confirmation per chunk`,
         votes: results,
         totalProcessed: processedVotes,
         totalFailed: totalVotes - results.length

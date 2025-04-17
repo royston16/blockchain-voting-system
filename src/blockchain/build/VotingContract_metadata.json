@@ -10,6 +10,31 @@
 				"inputs": [
 					{
 						"indexed": false,
+						"internalType": "uint256",
+						"name": "batchSize",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "timestamp",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "blockNumber",
+						"type": "uint256"
+					}
+				],
+				"name": "BatchVotesCast",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": false,
 						"internalType": "string",
 						"name": "electionId",
 						"type": "string"
@@ -60,6 +85,35 @@
 				],
 				"name": "VoteCast",
 				"type": "event"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "string[]",
+						"name": "_voterHashes",
+						"type": "string[]"
+					},
+					{
+						"internalType": "string[]",
+						"name": "_candidateIds",
+						"type": "string[]"
+					},
+					{
+						"internalType": "string[]",
+						"name": "_sessionIds",
+						"type": "string[]"
+					}
+				],
+				"name": "batchCastVotes",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
 			},
 			{
 				"inputs": [
@@ -382,11 +436,11 @@
 	},
 	"sources": {
 		"VotingContract.sol": {
-			"keccak256": "0xff66a1ad1637603f8916596300f649f6228d6bd1e52a1de531730053e50d757f",
+			"keccak256": "0xd6377303a4c359c73d1e65ed8fdb390a4ada8c2ad35de0e66d0bb3f97ad29162",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://2c0645370fac00f409126663579323e410e4b4283f169c8b75707291d2a5f973",
-				"dweb:/ipfs/QmYRyavHkCcxSVJWzX3EaP6KzJidW2vf3yMasTRAQddsf6"
+				"bzz-raw://a105243a626cbe358104165a84cf6451a373c9c27e65fe387743f8c40344ad9e",
+				"dweb:/ipfs/QmW5FnKaCo3nmXxWTdLXE9Y4AhpQDerh2Q9c4rnZMXXoLH"
 			]
 		}
 	},

@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import blockchainService from '../blockchain/ethereum-service';
+import { Link } from 'react-router-dom';
 
 function AdminPanel() {
   const [contractInfo, setContractInfo] = useState({});
   const [isSimulating, setIsSimulating] = useState(false);
-  const [showSimulation, setShowSimulation] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [simulationConfig, setSimulationConfig] = useState({
-    totalVotes: '',
-    batchSize: '', 
+    totalVotes: 100,
+    batchSize: 50, 
+    optimizeGas: true,
     candidates: [
       { id: "candidate1", name: "Candidate 1", percentage: 40 },
       { id: "candidate2", name: "Candidate 2", percentage: 35 },
@@ -33,10 +34,6 @@ function AdminPanel() {
       window.removeEventListener('voteDataUpdated', getContractInfo);
     };
   }, []);
-
-  const toggleSimulationConfig = () => {
-    setShowSimulation(!showSimulation);
-  };
 
   const handleCandidateChange = (index, field, value) => {
     const updatedCandidates = [...simulationConfig.candidates];
@@ -148,6 +145,13 @@ function AdminPanel() {
     setSimulationConfig(prev => ({
       ...prev,
       candidates
+    }));
+  };
+
+  const toggleGasOptimization = () => {
+    setSimulationConfig(prev => ({
+      ...prev,
+      optimizeGas: !prev.optimizeGas
     }));
   };
 
@@ -290,7 +294,8 @@ function AdminPanel() {
       // Use the enhanced batchCastVotes method with progress reporting
       await blockchainService.batchCastVotes(allVotes, {
         chunkSize: batchSize,
-        onProgress
+        onProgress,
+        optimizeGas: simulationConfig.optimizeGas
       });
       
       setStatusMessage(`Election simulation complete! ${allVotes.length} votes processed.`);
@@ -303,127 +308,152 @@ function AdminPanel() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">Election Management</h2>
+    <div className="bg-white rounded-lg shadow-lg p-6">
+      <h2 className="text-2xl font-bold mb-6">Election Management</h2>
       
-      <div className="mb-8 p-4 bg-gray-50 rounded-md">
-        <h3 className="text-lg font-semibold mb-2">Election Status</h3>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="text-sm font-medium">Contract Status:</div>
-          <div className="text-sm text-gray-600">
-            {contractInfo.contractAddress && contractInfo.contractAddress !== 'Not deployed' 
-              ? 'Active' 
-              : 'Not Deployed'}
-          </div>
-          
-          <div className="text-sm font-medium">Network:</div>
-          <div className="text-sm text-gray-600">
-            {contractInfo.networkDetails?.name || 'Unknown'}
-          </div>
-          
-          <div className="text-sm font-medium">Deployment:</div>
-          <div className="text-sm text-gray-600 truncate">
-            {contractInfo.contractAddress || 'Use Configuration page to deploy'}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-semibold">Contract Status</h3>
+        </div>
+        
+        <div className="bg-gray-50 p-4 rounded-md mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="font-medium">Contract Address:</div>
+              <div className={`mt-1 ${contractInfo.contractAddress && contractInfo.contractAddress !== 'Not deployed' ? 'text-green-600' : 'text-red-600'}`}>
+                {contractInfo.contractAddress || 'Not deployed'}
+              </div>
+            </div>
+            <div>
+              <div className="font-medium">Network:</div>
+              <div className="mt-1">
+                {contractInfo.networkDetails?.name || 'Unknown'} (Chain ID: {contractInfo.networkDetails?.chainId || 'Unknown'})
+              </div>
+            </div>
           </div>
         </div>
       </div>
       
-      <div className="border-t pt-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold">Election Simulation</h3>
-          <button
-            onClick={toggleSimulationConfig}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition"
-          >
-            {showSimulation ? 'Hide Configuration' : 'Configure Simulation'}
-          </button>
-        </div>
-        
-        {showSimulation && (
-          <div className="mb-6 p-4 bg-gray-50 rounded-md">
-            <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="mb-6">
+        <div className="bg-indigo-50 rounded-lg p-6 border border-indigo-100">
+          <h3 className="text-xl font-semibold mb-4 text-indigo-800">Election Simulation</h3>
+          <p className="text-indigo-700 mb-4">
+            Configure and run a simulated election with customized vote distribution.
+          </p>
+          
+          <div className="mb-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white p-4 rounded-md shadow-sm">
+              <label className="block text-sm font-medium mb-1 text-gray-700">Total Votes to Simulate</label>
+              <input 
+                type="number" 
+                value={simulationConfig.totalVotes}
+                onChange={handleTotalVotesChange}
+                min="1"
+                max="100000"
+                className="w-full p-2 border rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+              {simulationConfig.totalVotes > 10000 && (
+                <p className="text-xs text-amber-600 mt-1">
+                  Large simulations may require multiple confirmations and take time to process.
+                </p>
+              )}
+            </div>
+            
+            <div className="bg-white p-4 rounded-md shadow-sm">
+              <label className="block text-sm font-medium mb-1 text-gray-700">Batch Size (votes per transaction)</label>
+              <input 
+                type="number" 
+                value={simulationConfig.batchSize}
+                onChange={handleBatchSizeChange}
+                min="1"
+                max="500"
+                className="w-full p-2 border rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Larger batches = fewer confirmations (max 500 votes per transaction)
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Optimal gas efficiency: 50-100 votes per batch for most networks
+              </p>
+            </div>
+          </div>
+          
+          <div className="mb-4 bg-white p-4 rounded-md shadow-sm">
+            <div className="flex justify-between items-center">
               <div>
-                <label className="block text-sm font-medium mb-1">Total Votes to Simulate</label>
-                <input 
-                  type="number" 
-                  value={simulationConfig.totalVotes}
-                  onChange={handleTotalVotesChange}
-                  min="1"
-                  max="100000"
-                  className="w-full p-2 border rounded-md"
-                />
-                {simulationConfig.totalVotes > 10000 && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    Large simulations may require multiple confirmations and take time to process.
-                  </p>
-                )}
+                <label className="block text-sm font-medium text-gray-700 mb-1">Gas Optimization</label>
+                <p className="text-xs text-gray-500">Enable for cheaper transactions with large batches</p>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-1">Batch Size (votes per transaction)</label>
-                <input 
-                  type="number" 
-                  value={simulationConfig.batchSize}
-                  onChange={handleBatchSizeChange}
-                  min="1"
-                  max="500"
-                  className="w-full p-2 border rounded-md"
+              <button 
+                onClick={toggleGasOptimization} 
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${simulationConfig.optimizeGas ? 'bg-green-600' : 'bg-gray-300'}`}
+              >
+                <span 
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${simulationConfig.optimizeGas ? 'translate-x-6' : 'translate-x-1'}`} 
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Larger batches require fewer confirmations - all votes in a batch are processed in a single transaction
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Example: 1000 votes with batch size 100 = 10 confirmations (instead of 1000)
-                </p>
+              </button>
+            </div>
+          </div>
+          
+          <div className="mb-5">
+            <div className="flex justify-between items-center mb-3">
+              <label className="block text-sm font-medium text-gray-700">Candidates and Vote Distribution</label>
+              <div className="space-x-2">
+                <button 
+                  onClick={addCandidate}
+                  className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  Add Candidate
+                </button>
+                <button 
+                  onClick={equalizePercentages}
+                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  Equalize %
+                </button>
+                <button 
+                  onClick={generateRandomDistribution}
+                  className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 transition focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  Randomize %
+                </button>
               </div>
             </div>
             
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-medium">Candidates and Vote Distribution</label>
-                <div className="space-x-2">
-                  <button 
-                    onClick={addCandidate}
-                    className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
-                  >
-                    Add Candidate
-                  </button>
-                  <button 
-                    onClick={equalizePercentages}
-                    className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
-                  >
-                    Equalize %
-                  </button>
-                  <button 
-                    onClick={generateRandomDistribution}
-                    className="px-2 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700"
-                  >
-                    Randomize %
-                  </button>
-                </div>
-              </div>
-              
+            <div className="bg-white p-4 rounded-md shadow-sm">
               {simulationConfig.candidates.map((candidate, index) => (
-                <div key={index} className="flex items-center space-x-2 mb-2">
+                <div key={index} className="flex items-center space-x-2 mb-3">
                   <input
                     type="text"
                     value={candidate.id}
                     onChange={(e) => handleCandidateChange(index, 'id', e.target.value)}
-                    className="w-32 p-2 border rounded-md"
+                    className="w-32 p-2 border rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="ID"
                   />
-                  <input
-                    type="number"
-                    value={candidate.percentage}
-                    onChange={(e) => handleCandidateChange(index, 'percentage', Math.round(parseInt(e.target.value) || 0))}
-                    min="0"
-                    max="100"
-                    className="w-20 p-2 border rounded-md"
-                  />
-                  <span className="text-sm">%</span>
+                  <div className="flex-grow">
+                    <input
+                      type="range"
+                      value={candidate.percentage}
+                      onChange={(e) => handleCandidateChange(index, 'percentage', parseInt(e.target.value))}
+                      min="0"
+                      max="100"
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="w-20 flex items-center">
+                    <input
+                      type="number"
+                      value={candidate.percentage}
+                      onChange={(e) => handleCandidateChange(index, 'percentage', Math.round(parseInt(e.target.value) || 0))}
+                      min="0"
+                      max="100"
+                      className="w-16 p-2 border rounded-md text-center focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    <span className="text-sm ml-1">%</span>
+                  </div>
                   <button
                     onClick={() => removeCandidate(index)}
-                    className="text-red-500 hover:text-red-700"
+                    className="text-red-500 hover:text-red-700 focus:outline-none"
                     title="Remove candidate"
                   >
                     ✕
@@ -431,36 +461,54 @@ function AdminPanel() {
                 </div>
               ))}
               
-              <div className="mt-2 text-sm text-gray-600">
-                Total: {Math.round(simulationConfig.candidates.reduce((sum, c) => sum + c.percentage, 0))}%
-                {Math.round(simulationConfig.candidates.reduce((sum, c) => sum + c.percentage, 0)) !== 100 && (
-                  <span className="text-red-500 ml-2">
-                    (Should sum to 100%)
+              <div className="mt-3 flex justify-between items-center">
+                <div className="text-sm text-gray-700">
+                  Total: <span className={Math.round(simulationConfig.candidates.reduce((sum, c) => sum + c.percentage, 0)) !== 100 ? 'text-red-500 font-bold' : 'text-green-600 font-bold'}>
+                    {Math.round(simulationConfig.candidates.reduce((sum, c) => sum + c.percentage, 0))}%
                   </span>
-                )}
+                  {Math.round(simulationConfig.candidates.reduce((sum, c) => sum + c.percentage, 0)) !== 100 && (
+                    <span className="text-red-500 ml-2">
+                      (Should sum to 100%)
+                    </span>
+                  )}
+                </div>
+                
+                <button
+                  onClick={simulateElection}
+                  disabled={isSimulating || !contractInfo.contractAddress || contractInfo.contractAddress === 'Not deployed' || Math.round(simulationConfig.candidates.reduce((sum, c) => sum + c.percentage, 0)) !== 100}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-300 transition focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  {isSimulating ? 'Simulating...' : 'Run Simulation'}
+                </button>
               </div>
             </div>
           </div>
-        )}
-        
-        <div className="mt-4">
-          <button
-            onClick={simulateElection}
-            disabled={isSimulating || !contractInfo.contractAddress || contractInfo.contractAddress === 'Not deployed'}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-300 transition"
-          >
-            {isSimulating ? 'Simulating...' : 'Simulate Election'}
-          </button>
           
           {statusMessage && (
-            <div className="mt-4 p-3 bg-gray-100 rounded-md text-sm">
-              {statusMessage}
+            <div className="mt-4 p-4 bg-white rounded-md shadow-sm">
+              <h4 className="text-sm font-semibold mb-2 text-gray-700">Status:</h4>
+              <div className="p-3 bg-gray-50 rounded border text-sm overflow-auto max-h-32">
+                {statusMessage}
+              </div>
             </div>
           )}
           
           {(!contractInfo.contractAddress || contractInfo.contractAddress === 'Not deployed') && (
-            <div className="mt-2 text-sm text-red-500">
-              No active contract found. Use Configuration page to deploy a contract first.
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-600">
+              <div className="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                No active contract found. Use Configuration page to deploy a contract first.
+              </div>
+              <div className="mt-2 text-center">
+                <Link 
+                  to="/admin/configuration" 
+                  className="inline-block px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  Go to Configuration
+                </Link>
+              </div>
             </div>
           )}
         </div>
