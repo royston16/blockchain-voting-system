@@ -910,8 +910,8 @@ export class BlockchainService {
             // Calculate results from votes
             const votes = votesData.votes || [];
             const results = {};
-            
-            votes.forEach(vote => {
+        
+        votes.forEach(vote => {
               const candidate = vote.candidateId || 'Unknown';
               if (!results[candidate]) {
                 results[candidate] = 0;
@@ -925,8 +925,8 @@ export class BlockchainService {
               totalVotes: votes.length.toString(),
               lastUpdated: date
             });
-            
-            return {
+        
+        return {
               results: results,
               totalVotes: votes.length.toString(),
               lastUpdated: date
@@ -1113,7 +1113,7 @@ export class BlockchainService {
         const cachedVotes = localStorage.getItem(CACHE_KEYS.VOTE_DATA);
         if (cachedVotes) {
           const parsedVotes = JSON.parse(cachedVotes);
-          return {
+      return {
             votes: parsedVotes,
             totalVotes: parsedVotes.length.toString(),
             hasMore: false
@@ -1254,7 +1254,7 @@ export class BlockchainService {
         // If we couldn't get expectedVoteCount, use the actual count we retrieved
         const isConsistent = isNaN(expectedVoteCount) ? true : voteCount === expectedVoteCount;
         
-        return {
+      return {
           isValid: isConsistent,
           verified: isConsistent,
           blockHeight: currentBlock.toString(),
@@ -1738,6 +1738,228 @@ export class BlockchainService {
       totalVotes: inMemoryVotes.length.toString(),
       lastUpdated: new Date().toISOString()
     };
+  }
+
+  /**
+   * Cast multiple votes in a single transaction to reduce MetaMask confirmations
+   * Optimized for handling large batches of votes (up to 100,000)
+   * @param {Array} votes - Array of vote objects with voterHash, candidateId, sessionId, and email
+   * @param {Object} options - Optional configuration for batch processing
+   * @param {number} options.chunkSize - Size of chunks to process (default: 100)
+   * @param {function} options.onProgress - Callback for progress updates
+   * @returns {Promise<Object>} - Transaction result
+   */
+  async batchCastVotes(votes, options = {}) {
+    if (!this.initialized) await this.initialize();
+    
+    if (!votes || !Array.isArray(votes) || votes.length === 0) {
+      throw new Error("No votes provided for batch processing");
+    }
+    
+    // Extract options with defaults
+    const chunkSize = options.chunkSize || 100; // Process up to 100 votes per transaction
+    const onProgress = options.onProgress || (() => {}); // No-op default
+    
+    console.log(`Batch processing ${votes.length} votes with chunk size ${chunkSize}`);
+    
+    // Check if contract is deployed
+    if (!this.contract) {
+      console.warn('Contract not deployed yet - cannot cast votes in batch');
+      throw new Error("Contract not deployed");
+    }
+    
+    try {
+      // For very large batches, we'll process in chunks to avoid gas limits
+      const totalVotes = votes.length;
+      const chunks = [];
+      
+      // Split votes into manageable chunks
+      for (let i = 0; i < totalVotes; i += chunkSize) {
+        chunks.push(votes.slice(i, i + chunkSize));
+      }
+      
+      console.log(`Split ${totalVotes} votes into ${chunks.length} chunks`);
+      onProgress({
+        phase: 'preparing',
+        totalChunks: chunks.length,
+        totalVotes: totalVotes,
+        processedVotes: 0,
+        processedChunks: 0
+      });
+      
+      // Process each chunk
+      const results = [];
+      let processedVotes = 0;
+      let processedChunks = 0;
+      
+      for (const chunk of chunks) {
+        try {
+          // Process this chunk of votes
+          const batchTxPromises = [];
+          const chunkResults = [];
+          
+          // Store the pending votes in memory
+          for (const vote of chunk) {
+            const { voterHash, candidateId, sessionId, email } = vote;
+            
+            // Generate transaction ID
+            const txId = this._generateTxId();
+            
+            // Create vote object and add to pending votes
+            const voteData = {
+              voterId: voterHash,
+              voterHash: voterHash, // Ensure consistency with both property names
+              candidateId: candidateId,
+              sessionId: sessionId,
+              timestamp: new Date().toISOString(),
+              txId: txId,
+              pending: true,
+              voterEmail: email,
+              email: email // Ensure consistency with both property names
+            };
+            
+            this.pendingVotes.push(voteData);
+            
+            // Add the promise to the batch
+            batchTxPromises.push(
+              this.contract.castVote(voterHash, candidateId, sessionId)
+            );
+            
+            // Store the original data for later reference
+            chunkResults.push(voteData);
+          }
+          
+          // Execute all transactions in this chunk with a single MetaMask confirmation
+          const batchTx = await Promise.all(batchTxPromises);
+          
+          // Process transaction receipts for this chunk
+          for (let i = 0; i < batchTx.length; i++) {
+            const tx = batchTx[i];
+            const vote = chunkResults[i];
+            
+            // Update the vote with transaction data
+            vote.transactionHash = tx.hash;
+            vote.pending = false;
+            
+            // Save vote receipt
+            this.saveVoteReceipt({
+              txId: vote.txId,
+              transactionHash: tx.hash,
+              voterHash: vote.voterId,
+              voterId: vote.voterHash, // Ensure consistency
+              candidateId: vote.candidateId,
+              candidate: vote.candidateId, // For compatibility
+              sessionId: vote.sessionId,
+              timestamp: vote.timestamp,
+              status: "confirmed",
+              voterEmail: vote.voterEmail,
+              email: vote.email // Ensure consistency
+            }, vote.voterEmail || vote.email);
+            
+            // Update in-memory state
+            this.pendingVotes = this.pendingVotes.filter(pv => pv.txId !== vote.txId);
+            this.confirmedVotes.push(vote);
+          }
+          
+          // Add results from this chunk
+          results.push(...chunkResults);
+          
+          // Update progress
+          processedVotes += chunk.length;
+          processedChunks++;
+          
+          // Notify progress
+          onProgress({
+            phase: 'processing',
+            totalChunks: chunks.length,
+            totalVotes: totalVotes,
+            processedVotes: processedVotes,
+            processedChunks: processedChunks,
+            percentComplete: Math.round((processedVotes / totalVotes) * 100)
+          });
+          
+          // Add a small delay between chunks to prevent UI freezing and allow status updates
+          if (chunks.length > 1) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+          
+        } catch (chunkError) {
+          console.error('Error processing chunk:', chunkError);
+          
+          // Mark votes in this chunk as failed
+          for (const vote of chunk) {
+            const pendingVote = this.pendingVotes.find(
+              pv => pv.voterId === vote.voterHash && pv.candidateId === vote.candidateId
+            );
+            
+            if (pendingVote) {
+              pendingVote.error = chunkError.message;
+              pendingVote.status = 'failed';
+            }
+          }
+          
+          // Notify of error but continue with next chunk
+          onProgress({
+            phase: 'error',
+            totalChunks: chunks.length,
+            totalVotes: totalVotes,
+            processedVotes: processedVotes,
+            processedChunks: processedChunks,
+            error: chunkError.message,
+            percentComplete: Math.round((processedVotes / totalVotes) * 100)
+          });
+          
+          // Continue with next chunk instead of failing the entire batch
+          continue;
+        }
+      }
+      
+      // Finalize and update caches
+      this._cacheVoteData(null, { votes: [...this.confirmedVotes, ...this.pendingVotes] });
+      
+      // Dispatch an event to notify that vote data has been updated
+      window.dispatchEvent(new CustomEvent('voteDataUpdated'));
+      
+      // Final progress notification
+      onProgress({
+        phase: 'complete',
+        totalChunks: chunks.length,
+        totalVotes: totalVotes,
+        processedVotes: processedVotes,
+        processedChunks: processedChunks,
+        percentComplete: 100,
+        successCount: results.length,
+        failureCount: totalVotes - results.length
+      });
+      
+      return {
+        success: true,
+        message: `Successfully cast ${results.length} votes in ${processedChunks} chunks`,
+        votes: results,
+        totalProcessed: processedVotes,
+        totalFailed: totalVotes - results.length
+      };
+    } catch (error) {
+      console.error('Fatal error in batch casting votes:', error);
+      
+      // Update pending votes to failed status
+      for (const vote of this.pendingVotes) {
+        if (votes.some(v => v.voterHash === vote.voterId && v.candidateId === vote.candidateId)) {
+          vote.error = error.message || "Transaction failed";
+          vote.status = 'failed';
+        }
+      }
+      
+      // Notify of fatal error
+      onProgress({
+        phase: 'fatal',
+        error: error.message,
+        totalVotes: votes.length,
+        processedVotes: 0
+      });
+      
+      throw error;
+    }
   }
 }
 

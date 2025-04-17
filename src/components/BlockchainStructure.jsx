@@ -9,7 +9,8 @@ export default function BlockchainStructure() {
   const [expandedBlock, setExpandedBlock] = useState(null);
   const [selectedVoteForVerification, setSelectedVoteForVerification] = useState(null);
   const [verificationResult, setVerificationResult] = useState({});
-  const [displayedBlocks, setDisplayedBlocks] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const blocksPerPage = 5;
   const [votes, setVotes] = useState([]);
 
   useEffect(() => {
@@ -206,10 +207,16 @@ export default function BlockchainStructure() {
     }
   };
   
-  // Method to load more blocks
-  const loadMoreBlocks = () => {
-    setDisplayedBlocks(prev => Math.min(prev + 10, blocks.length));
+  // Method to paginate blocks
+  const paginate = (pageNumber) => {
+    setCurrentPage(pageNumber);
   };
+
+  // Calculate blocks to display based on pagination
+  const indexOfLastBlock = currentPage * blocksPerPage;
+  const indexOfFirstBlock = indexOfLastBlock - blocksPerPage;
+  const currentBlocks = blocks.slice(indexOfFirstBlock, indexOfLastBlock);
+  const totalPages = Math.ceil(blocks.length / blocksPerPage);
 
   if (loading) {
     return (
@@ -314,7 +321,7 @@ export default function BlockchainStructure() {
       )}
       
       <div className="space-y-4">
-        {blocks.slice(0, displayedBlocks).map((block, i) => (
+        {currentBlocks.map((block, i) => (
           <div 
             key={i} 
             className={`bg-white rounded-lg shadow overflow-hidden border-l-4 ${
@@ -378,14 +385,118 @@ export default function BlockchainStructure() {
         ))}
       </div>
       
-      {displayedBlocks < blocks.length && (
-        <div className="mt-6 text-center">
-          <button 
-            onClick={loadMoreBlocks} 
-            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded text-gray-700"
-          >
-            Load More Blocks
-          </button>
+      {/* Pagination Controls */}
+      {blocks.length > blocksPerPage && (
+        <div className="flex justify-center mt-6">
+          <div className="flex space-x-2">
+            <button
+              onClick={() => paginate(currentPage > 1 ? currentPage - 1 : 1)}
+              disabled={currentPage === 1}
+              className={`px-3 py-1 rounded-md ${
+                currentPage === 1 
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
+              }`}
+            >
+              Previous
+            </button>
+            
+            {/* Improved pagination with the requested sliding window pattern */}
+            {totalPages <= 7 ? (
+              // If 7 or fewer pages, show all pages
+              [...Array(totalPages).keys()].map(number => (
+                <button
+                  key={number + 1}
+                  onClick={() => paginate(number + 1)}
+                  className={`px-3 py-1 rounded-md ${
+                    currentPage === number + 1
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  {number + 1}
+                </button>
+              ))
+            ) : (
+              <>
+                {/* Current page is in first 3 pages */}
+                {currentPage <= 3 && (
+                  <>
+                    {/* First 3 pages */}
+                    {[1, 2, 3].map(number => (
+                      <button
+                        key={number}
+                        onClick={() => paginate(number)}
+                        className={`px-3 py-1 rounded-md ${
+                          currentPage === number
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        {number}
+                      </button>
+                    ))}
+                    <span className="px-3 py-1">...</span>
+                  </>
+                )}
+                
+                {/* Current page is in middle (not in first 3 or last 3) */}
+                {currentPage > 3 && currentPage < totalPages - 2 && (
+                  <>
+                    {/* Window of 3 pages centered around current page */}
+                    {[currentPage - 1, currentPage, currentPage + 1].map(number => (
+                      <button
+                        key={number}
+                        onClick={() => paginate(number)}
+                        className={`px-3 py-1 rounded-md ${
+                          currentPage === number
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        {number}
+                      </button>
+                    ))}
+                    <span className="px-3 py-1">...</span>
+                  </>
+                )}
+                
+                {/* Current page is in last 3 pages */}
+                {currentPage >= totalPages - 2 && (
+                  <>
+                    <span className="px-3 py-1">...</span>
+                  </>
+                )}
+                
+                {/* Last 3 pages - always show */}
+                {[totalPages - 2, totalPages - 1, totalPages].map(number => (
+                  <button
+                    key={number}
+                    onClick={() => paginate(number)}
+                    className={`px-3 py-1 rounded-md ${
+                      currentPage === number
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    {number}
+                  </button>
+                ))}
+              </>
+            )}
+            
+            <button
+              onClick={() => paginate(currentPage < totalPages ? currentPage + 1 : totalPages)}
+              disabled={currentPage === totalPages}
+              className={`px-3 py-1 rounded-md ${
+                currentPage === totalPages 
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
+              }`}
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
       

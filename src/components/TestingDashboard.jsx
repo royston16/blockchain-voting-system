@@ -433,7 +433,7 @@ function TestingDashboard() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6">Blockchain Testing Dashboard</h2>
+      <h2 className="text-2xl font-bold mb-6">Blockchain Configuration</h2>
       
       {actionFeedback && (
         <div className={`p-4 mb-6 rounded-lg ${

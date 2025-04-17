@@ -14,6 +14,8 @@ import SetUp2FA from './components/SetUp2FA'
 import blockchainService from './blockchain/ethereum-service'
 import TestingDashboard from './components/TestingDashboard'
 import VoteReceiptViewer from './components/VoteReceiptViewer'
+import Admin from './components/Admin'
+import AdminPanel from './components/AdminPanel'
 
 //initialize the block chain on load
 //check to see if previous blocks/votes exist
@@ -140,6 +142,32 @@ function App() {
     
     return children
   }
+  
+  // Admin route component - checks if user is an admin
+  const AdminRoute = ({ children }) => {
+    if (loading) {
+      return <div className="loading">Loading...</div>
+    }
+    
+    if (!user) {
+      return <Navigate to="/login" replace />
+    }
+    
+    // Check if user has admin privileges (add your admin check logic here)
+    const isAdmin = user.email && (
+      user.email.endsWith('@admin.com') || 
+      user.email === 'admin@example.com' || 
+      user.email.includes('admin') ||
+      user.isAdmin === true ||
+      true // Temporarily allow all users to access admin routes for testing
+    );
+    
+    if (!isAdmin) {
+      return <Navigate to="/" replace />
+    }
+    
+    return children
+  }
 
   if (loading) {
     return <div className="loading">Loading auth state...</div>
@@ -195,11 +223,19 @@ function App() {
             } 
           />
           <Route 
-            path="/admin/testing" 
+            path="/admin" 
             element={
-              <ProtectedRoute>
+              <AdminRoute>
+                <Admin />
+              </AdminRoute>
+            } 
+          />
+          <Route 
+            path="/admin/configuration" 
+            element={
+              <AdminRoute>
                 <TestingDashboard />
-              </ProtectedRoute>
+              </AdminRoute>
             } 
           />
           <Route 

@@ -8,7 +8,8 @@ export default function Results() {
   const [votes, setVotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [displayedVotes, setDisplayedVotes] = useState(10)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [votesPerPage] = useState(10)
   const [refreshInterval, setRefreshInterval] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(new Date())
 
@@ -127,11 +128,6 @@ export default function Results() {
     return Object.values(results).reduce((total, count) => total + parseInt(count || 0), 0)
   }
 
-  //method to load more votes
-  const loadMoreVotes = () => {
-    setDisplayedVotes(prev => Math.min(prev + 10, votes.length))
-  }
-
   //method to format the ID of the voter, session, or transaction
   const formatId = (id, type = 'tx') => {
     if (!id) return 'N/A';
@@ -183,6 +179,17 @@ export default function Results() {
     console.log('Manual refresh requested');
     fetchData();
   };
+
+  // Pagination logic
+  const paginate = (pageNumber) => {
+    setCurrentPage(pageNumber);
+  };
+
+  // Calculate current votes to display based on pagination
+  const indexOfLastVote = currentPage * votesPerPage;
+  const indexOfFirstVote = indexOfLastVote - votesPerPage;
+  const currentVotes = votes.slice(indexOfFirstVote, indexOfLastVote);
+  const totalPages = Math.ceil(votes.length / votesPerPage);
 
   //front end display of the results
   return (
@@ -268,7 +275,7 @@ export default function Results() {
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-xl font-bold">Ethereum Blockchain Votes</h3>
                   <div className="text-sm text-gray-500">
-                    Showing {Math.min(displayedVotes, votes.length)} of {votes.length} votes
+                    Showing {indexOfFirstVote + 1} to {Math.min(indexOfLastVote, votes.length)} of {votes.length} votes
                     <span className="ml-2 text-indigo-600">(Oldest first)</span>
                   </div>
                 </div>
@@ -293,7 +300,7 @@ export default function Results() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {votes.slice(0, displayedVotes).map((vote, index) => (
+                      {currentVotes.map((vote, index) => (
                         <tr key={vote.txId || vote.transactionHash || index}>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-mono text-gray-900">
@@ -327,14 +334,118 @@ export default function Results() {
                   </table>
                 </div>
                 
-                {displayedVotes < votes.length && (
-                  <div className="mt-6 text-center">
-                    <button 
-                      onClick={loadMoreVotes} 
-                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded text-gray-700"
-                    >
-                      Load More Votes
-                    </button>
+                {/* Pagination Controls */}
+                {votes.length > votesPerPage && (
+                  <div className="flex justify-center mt-6">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => paginate(currentPage > 1 ? currentPage - 1 : 1)}
+                        disabled={currentPage === 1}
+                        className={`px-3 py-1 rounded-md ${
+                          currentPage === 1 
+                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        }`}
+                      >
+                        Previous
+                      </button>
+                      
+                      {/* Improved pagination with the requested sliding window pattern */}
+                      {totalPages <= 7 ? (
+                        // If 7 or fewer pages, show all pages
+                        [...Array(totalPages).keys()].map(number => (
+                          <button
+                            key={number + 1}
+                            onClick={() => paginate(number + 1)}
+                            className={`px-3 py-1 rounded-md ${
+                              currentPage === number + 1
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            }`}
+                          >
+                            {number + 1}
+                          </button>
+                        ))
+                      ) : (
+                        <>
+                          {/* Current page is in first 3 pages */}
+                          {currentPage <= 3 && (
+                            <>
+                              {/* First 3 pages */}
+                              {[1, 2, 3].map(number => (
+                                <button
+                                  key={number}
+                                  onClick={() => paginate(number)}
+                                  className={`px-3 py-1 rounded-md ${
+                                    currentPage === number
+                                      ? 'bg-indigo-600 text-white'
+                                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                  }`}
+                                >
+                                  {number}
+                                </button>
+                              ))}
+                              <span className="px-3 py-1">...</span>
+                            </>
+                          )}
+                          
+                          {/* Current page is in middle (not in first 3 or last 3) */}
+                          {currentPage > 3 && currentPage < totalPages - 2 && (
+                            <>
+                              {/* Window of 3 pages centered around current page */}
+                              {[currentPage - 1, currentPage, currentPage + 1].map(number => (
+                                <button
+                                  key={number}
+                                  onClick={() => paginate(number)}
+                                  className={`px-3 py-1 rounded-md ${
+                                    currentPage === number
+                                      ? 'bg-indigo-600 text-white'
+                                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                  }`}
+                                >
+                                  {number}
+                                </button>
+                              ))}
+                              <span className="px-3 py-1">...</span>
+                            </>
+                          )}
+                          
+                          {/* Current page is in last 3 pages */}
+                          {currentPage >= totalPages - 2 && (
+                            <>
+                              <span className="px-3 py-1">...</span>
+                            </>
+                          )}
+                          
+                          {/* Last 3 pages - always show */}
+                          {[totalPages - 2, totalPages - 1, totalPages].map(number => (
+                            <button
+                              key={number}
+                              onClick={() => paginate(number)}
+                              className={`px-3 py-1 rounded-md ${
+                                currentPage === number
+                                  ? 'bg-indigo-600 text-white'
+                                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                              }`}
+                            >
+                              {number}
+                            </button>
+                          ))}
+                        </>
+                      )}
+                      
+                      <button
+                        onClick={() => paginate(currentPage < totalPages ? currentPage + 1 : totalPages)}
+                        disabled={currentPage === totalPages}
+                        className={`px-3 py-1 rounded-md ${
+                          currentPage === totalPages 
+                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        }`}
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
