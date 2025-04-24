@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import bg from "../assets/bg-image.png";
+import blockchainVote from "../assets/blockchainVote.png";
 import { loginVoter, auth, sendEmailVerification } from "../../authentication/firebase";
 import { getDoc, doc } from "firebase/firestore";
 import { db } from "../../authentication/firebase";
 import { verifyToken } from "../../authentication/twoFactor";
+import PropTypes from 'prop-types';
 
 //eslint-disable-next-line react/prop-types (no need for prop types in this component)
 export default function Login({ setUser }) {
@@ -137,107 +138,116 @@ export default function Login({ setUser }) {
 
   //front end display of the login page
   return (
-    <div className="card flex justify-between">
-      <form onSubmit={handleLogin} className="w-full pr-4">
-        <h2 className="font-bold text-xl">Voter Login</h2>
-        
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mt-4" role="alert">
-            <span className="block sm:inline">{error}</span>
-          </div>
-        )}
-        
-        {verificationReminder && (
-          <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded mt-4" role="alert">
-            <h3 className="font-bold">Email Verification Required</h3>
-            <p className="mt-2">For security reasons, you must verify your email before accessing the voting system.</p>
-            <ol className="list-decimal pl-4 mt-2">
-              <li>Check your inbox for the verification email</li>
-              <li>Click the verification link in the email</li>
-              <li>Return to this page and log in again</li>
-            </ol>
-            <button 
-              type="button"
-              onClick={resendVerificationEmail}
-              className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded mt-2"
-            >
-              Resend Verification Email
-            </button>
-          </div>
-        )}
-        
-        {require2FA && (
-          <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mt-4">
-            <h3 className="font-bold">Two-Factor Authentication Required</h3>
-            <p className="mt-2">Please enter the 6-digit code from your authenticator app!</p>
-            <div className="mt-2">
+    <div className="min-h-screen flex flex-col items-center w-full">
+      <img src={blockchainVote} alt="BlockchainVote Logo" className="h-24 w-auto mb-6 mt-6" />
+      <div className="w-full max-w-[520px] bg-white rounded-lg shadow-md p-8">
+        <div className="mb-8">
+          <p className="text-2xl text-center font-bold text-gray-900">Welcome Back</p>
+          <p className="text-center text-sm text-gray-600 mt-2">
+            Sign in to access your voting dashboard
+          </p>
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-6">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-600 rounded-md p-4 text-sm">
+              {error}
+            </div>
+          )}
+
+          {verificationReminder && (
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md p-4 text-sm">
+              <h3 className="font-medium mb-2">Email Verification Required</h3>
+              <p>For security reasons, you must verify your email before accessing the voting system.</p>
+              <ol className="list-decimal pl-4 mt-2 mb-3">
+                <li>Check your inbox for the verification email</li>
+                <li>Click the verification link in the email</li>
+                <li>Return to this page and log in again</li>
+              </ol>
+              <button 
+                type="button"
+                onClick={resendVerificationEmail}
+                className="w-full py-2 px-3 border border-transparent rounded-md text-sm font-medium text-yellow-700 bg-yellow-100 hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+              >
+                Resend Verification Email
+              </button>
+            </div>
+          )}
+
+          {require2FA && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-700 rounded-md p-4 text-sm">
+              <h3 className="font-medium mb-2">Two-Factor Authentication Required</h3>
+              <p>Please enter the 6-digit code from your authenticator app!</p>
               <input
                 type="text"
                 value={token2FA}
                 onChange={(e) => setToken2FA(e.target.value)}
                 placeholder="123456"
                 maxLength={6}
-                className="w-full p-2 border rounded mt-1"
+                className="mt-3 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
+              <button 
+                onClick={handle2FAVerification}
+                className="mt-3 w-full py-2 px-3 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={loading || token2FA.length !== 6}
+              >
+                {loading ? "Verifying..." : "Verify"}
+              </button>
             </div>
-            <button 
-              onClick={handle2FAVerification}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mt-2"
-              disabled={loading || token2FA.length !== 6}
+          )}
+
+          {!require2FA && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="Enter your email address"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter your password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+
+              <button 
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? "Signing in..." : "Sign in"}
+              </button>
+            </>
+          )}
+
+          <p className="text-center text-sm text-gray-600">
+            Don&apos;t have an account?{" "}
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="font-medium text-indigo-600 hover:text-indigo-500"
             >
-              {loading ? "Verifying..." : "Verify"}
+              Register here
             </button>
-          </div>
-        )}
-        
-        {!require2FA && (
-          <>
-            <div className="mt-4">
-              <label className="font-semibold">Email: </label>
-              <input
-                type="email"
-                required
-                placeholder="Enter your email address"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full p-2 border rounded mt-1"
-              />
-            </div>
-            
-            <div className="mt-4">
-              <label className="font-semibold">Password: </label>
-              <input
-                type="password"
-                required
-                placeholder="Enter your password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full p-2 border rounded mt-1"
-              />
-            </div>
-            
-            <button 
-              className="button mt-6 w-full" 
-              type="submit"
-              disabled={loading}
-            >
-              {loading ? "Signing in..." : "Login"}
-            </button>
-          </>
-        )}
-        
-        <p className="mt-4 text-center">
-          Don't have an account?{" "}
-          <button
-            type="button"
-            className="text-blue-600 hover:underline"
-            onClick={() => navigate("/")}
-          >
-            Register here
-          </button>
-        </p>
-      </form>
-      <img src={bg} alt="background" className="w-1/2" />
+          </p>
+        </form>
+      </div>
     </div>
   );
 }
+
+Login.propTypes = {
+  setUser: PropTypes.func.isRequired
+};

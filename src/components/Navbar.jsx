@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { logoutVoter } from '../../authentication/firebase';
 
@@ -48,6 +48,10 @@ export default function Navbar({ user, setUser }) {
   const toggleAdminMenu = () => {
     setAdminMenuOpen(!adminMenuOpen);
   };
+
+  if(!user) {
+    return null;
+  }
 
   //front end display of the navbar
   return (
