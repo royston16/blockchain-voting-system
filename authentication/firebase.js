@@ -1,4 +1,4 @@
-//Import the Firebase SDK
+//Firebase SDK for the first layer of the application
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
@@ -10,8 +10,7 @@ import {
 } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, getDoc, query, where, getDocs } from 'firebase/firestore';
 
-//Firebase configuration
-//Use the values from the firebase console
+//Firebase configuration (configure the values from the firebase console)
 const firebaseConfig = {
     apiKey: "AIzaSyBMnmqAXbVyNT8BFik3SmcU84WLpMItayQ",
     authDomain: "blockchain-based-voting-75039.firebaseapp.com",
@@ -22,15 +21,15 @@ const firebaseConfig = {
     measurementId: "G-EFB6EMGWZ7"
   };
 
-//Initialize Firebase
+//initialize firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Register a new voter with email/password
+//register a new voter with email/password
 export const registerVoter = async (email, password, userData) => {
   try {
-    // Check if voter with this email already exists
+    //check if voter with this email already exists
     const votersRef = collection(db, 'voters');
     const q = query(votersRef, where("email", "==", email));
     const querySnapshot = await getDocs(q);
@@ -39,17 +38,17 @@ export const registerVoter = async (email, password, userData) => {
       throw new Error('A voter with this email is already registered');
     }
     
-    // Create user in Firebase Auth
+    //create user in Firebase Auth with required fields (email, password)
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
     
-    // Send email verification
+    //send email verification
     await sendEmailVerification(user);
     
-    // Generate a unique voter key
+    //generate a unique voter key
     const voterKey = generateVoterKey();
     
-    // Create voter document in Firestore
+    //create voter document in Firestore using required fields
     await setDoc(doc(db, 'voters', user.uid), {
       ...userData,
       email,
@@ -65,27 +64,27 @@ export const registerVoter = async (email, password, userData) => {
   }
 };
 
-// Login with email/password
+//login with email/password to the application
 export const loginVoter = async (email, password) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
     
-    // Check if email is verified
+    //check if email is verified by checking the emailVerified field in the user document with the data from the database
     if (!user.emailVerified) {
-      // Send verification email again if needed
+      //send verification email again if needed if users email is not verified
       await sendEmailVerification(user);
       throw new Error('Please verify your email before logging in. A new verification email has been sent.');
     }
     
-    // Get voter data from Firestore
+    //get voter data from Firestore
     const voterDoc = await getDoc(doc(db, 'voters', user.uid));
     
     if (!voterDoc.exists()) {
       throw new Error('Voter record not found');
     }
     
-    // Update emailVerified status in Firestore if needed
+    //update emailVerified status in Firestore if needed
     if (voterDoc.data().emailVerified === false) {
       await setDoc(doc(db, 'voters', user.uid), {
         emailVerified: true
@@ -103,7 +102,7 @@ export const loginVoter = async (email, password) => {
   }
 };
 
-// Sign out
+//sign out from the application
 export const logoutVoter = async () => {
   try {
     await signOut(auth);
@@ -113,12 +112,12 @@ export const logoutVoter = async () => {
   }
 };
 
-// Check if a user is logged in
+//check if a user is logged in
 export const checkAuthState = (callback) => {
   return onAuthStateChanged(auth, callback);
 };
 
-// Update a voter's data
+//update a voter's data in the database
 export const updateVoterData = async (userId, data) => {
   try {
     await setDoc(doc(db, 'voters', userId), data, { merge: true });
@@ -128,7 +127,7 @@ export const updateVoterData = async (userId, data) => {
   }
 };
 
-// Record that a voter has voted
+//record that a voter has voted in the database
 export const recordVote = async (userId, candidateId) => {
   try {
     await setDoc(doc(db, 'voters', userId), {
@@ -143,7 +142,7 @@ export const recordVote = async (userId, candidateId) => {
   }
 };
 
-// Generate a unique voter key
+//generate a unique voter key (voterKey for unique identification of the voter)
 const generateVoterKey = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   const keyLength = 12;
@@ -151,7 +150,7 @@ const generateVoterKey = () => {
   
   for (let i = 0; i < keyLength; i++) {
     key += chars.charAt(Math.floor(Math.random() * chars.length));
-    // Add a hyphen every 4 characters except at the end
+    //add a hyphen every 4 characters except at the end
     if (i > 0 && i < keyLength - 1 && (i + 1) % 4 === 0) {
       key += '-';
     }
@@ -160,7 +159,7 @@ const generateVoterKey = () => {
   return key;
 };
 
-// Check if email is already registered
+//check if email is already registered
 export const checkEmailAvailability = async (email) => {
   try {
     if (!email || !email.includes('@')) return null;
@@ -176,5 +175,5 @@ export const checkEmailAvailability = async (email) => {
   }
 };
 
-// Export the auth and db objects for direct access
+//export the auth and db objects for direct access
 export { auth, db, sendEmailVerification };
