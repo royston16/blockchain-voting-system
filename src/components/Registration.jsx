@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import bg from "../assets/bg-image.png";
+import blockchainVote from "../assets/blockchainVote.png";
 import { registerVoter, logoutVoter, checkEmailAvailability } from "../../authentication/firebase";
+import ReCAPTCHA from "react-google-recaptcha";
 
 //method to register the voter with the required parameters
 export default function Registration() {
@@ -16,8 +17,7 @@ export default function Registration() {
   const [success, setSuccess] = useState(false);
   const [isOver18, setIsOver18] = useState(false);
   const [consentToTerms, setConsentToTerms] = useState(false);
-  const [captcha, setCaptcha] = useState({ question: "", answer: 0 });
-  const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const [recaptchaValue, setRecaptchaValue] = useState(null);
   const [emailStatus, setEmailStatus] = useState({ checking: false, available: true, message: "" });
   const navigate = useNavigate();
 
@@ -62,42 +62,6 @@ export default function Registration() {
     return () => clearTimeout(timeoutId);
   }, [formData.email, debouncedEmailCheck]);
 
-  //generate a simple math captcha on component mount
-  useEffect(() => {
-    generateCaptcha();
-  }, []);
-
-  //generate a pattern recognition CAPTCHA that's difficult for bots
-  const generateCaptcha = () => {
-    //create a random array of symbols
-    const symbols = ['@', '#', '$', '%', '&', '*', '+', '=', '>', '<'];
-    const targetSymbol = symbols[Math.floor(Math.random() * symbols.length)];
-    
-    //create a pattern with random distribution of symbols
-    let pattern = '';
-    let count = 0;
-    
-    const patternLength = Math.floor(Math.random() * 10) + 20; //20-30 characters
-    
-    for (let i = 0; i < patternLength; i++) {
-      //decide whether to add the target symbol or a random one
-      if (Math.random() < 0.3) { //30% chance for target symbol that is the answer to the CAPTCHA
-        pattern += targetSymbol;
-        count++;
-      } else {
-        //add a random symbol that's not the target
-        const otherSymbols = symbols.filter(s => s !== targetSymbol);
-        pattern += otherSymbols[Math.floor(Math.random() * otherSymbols.length)];
-      }
-    }
-    
-    setCaptcha({
-      question: `How many "${targetSymbol}" symbols appear in this pattern?\n\n "${pattern}"`,
-      answer: count
-    });
-    setCaptchaAnswer("");
-  };
-
   //method to handle the submission of the registration form
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -126,9 +90,9 @@ export default function Registration() {
         throw new Error('Passwords do not match');
       }
       
-      //validate the captcha to ensure the user is human
-      if (parseInt(captchaAnswer) !== captcha.answer) {
-        throw new Error('Incorrect CAPTCHA answer');
+      //validate the reCAPTCHA
+      if (!recaptchaValue) {
+        throw new Error('Please complete the reCAPTCHA verification');
       }
 
       //validate the age verification to ensure the user is over 18
@@ -154,10 +118,9 @@ export default function Registration() {
       
       //clear the form
       setFormData({ name: "", email: "", password: "", confirmPassword: "" });
-      setCaptchaAnswer("");
+      setRecaptchaValue(null);
       setIsOver18(false);
       setConsentToTerms(false);
-      generateCaptcha();
       
       //explicitly log out the user first (Firebase automatically signs in new users)
       await logoutVoter();
@@ -175,149 +138,156 @@ export default function Registration() {
     }
   };
 
+  console.log(recaptchaValue);
+
   //front end display of the registration form
   return (
-    <div className="card flex justify-between">
-      <form onSubmit={handleSubmit} className="w-full pr-4">
-        <h2 className="font-bold text-xl">Voter Registration</h2>
-        
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mt-4" role="alert">
-            <span className="block sm:inline">{error}</span>
-          </div>
-        )}
-        
-        {success && (
-          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mt-4" role="alert">
-            <span className="font-bold block mb-1">Registration successful!</span>
-            <p>A verification email has been sent to your email address.</p>
-            <p className="mt-2">Important: You must verify your email before you can log in and vote.</p>
-            <p className="mt-2">Redirecting to login page...</p>
-          </div>
-        )}
-        
-        <div className="mt-4">
-          <label className="font-semibold">Full Name: </label>
-          <input
-            type="text"
-            required
-            placeholder="Enter your full name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="w-full p-2 border rounded mt-1"
-          />
+    <div className="min-h-screen flex flex-col items-center w-full">
+      <img src={blockchainVote} alt="BlockchainVote Logo" className="h-24 w-auto mb-6 mt-6" />
+      <div className="w-full max-w-[520px] bg-white rounded-lg shadow-md p-8">
+        <div className="mb-8">
+          <p className="text-2xl text-center font-bold text-gray-900">Sign Up</p>
+          <p className="text-center text-sm text-gray-600 mt-2">
+            Join our secure blockchain-based voting system
+          </p>
         </div>
-        
-        <div className="mt-4">
-          <label className="font-semibold">Email: </label>
-          <input
-            type="email"
-            required
-            placeholder="Enter your email address"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            className={`w-full p-2 border rounded mt-1 ${
-              emailStatus.message ? 
-                emailStatus.available ? 'border-green-500' : 'border-red-500' 
-                : ''
-            }`}
-          />
-          {emailStatus.checking ? (
-            <p className="text-sm text-gray-600 mt-1">Checking email availability...</p>
-          ) : emailStatus.message ? (
-            <p className={`text-sm mt-1 ${
-              emailStatus.available ? 'text-green-600' : 'text-red-600'
-            }`}>
-              {emailStatus.message}
-            </p>
-          ) : (
-            <p className="text-sm text-gray-600 mt-1">We'll send a verification email to this address</p>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-600 rounded-md p-4 text-sm">
+              {error}
+            </div>
           )}
-        </div>
-        
-        <div className="mt-4">
-          <label className="font-semibold">Password: </label>
-          <input
-            type="password"
-            required
-            placeholder="Create a password (min. 6 characters)"
-            value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            className="w-full p-2 border rounded mt-1"
-          />
-        </div>
-        
-        <div className="mt-4">
-          <label className="font-semibold">Confirm Password: </label>
-          <input
-            type="password"
-            required
-            placeholder="Confirm your password"
-            value={formData.confirmPassword}
-            onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-            className="w-full p-2 border rounded mt-1"
-          />
-        </div>
 
-        {/* CAPTCHA part where the user has to solve a simple math problem to prove they are human */}
-        <div className="mt-4">
-          <label className="font-semibold">CAPTCHA: {captcha.question}</label>
-          <input
-            type="number"
-            required
-            placeholder="Enter your answer"
-            value={captchaAnswer}
-            onChange={(e) => setCaptchaAnswer(e.target.value)}
-            className="w-full p-2 border rounded mt-1"
-          />
+          {success && (
+            <div className="bg-green-50 border border-green-200 text-green-600 rounded-md p-4 text-sm">
+              <p className="font-medium">Registration successful!</p>
+              <p className="mt-1">A verification email has been sent to your email address.</p>
+              <p className="mt-1">Important: You must verify your email before you can log in and vote.</p>
+              <p className="mt-1">Redirecting to login page...</p>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+            <input
+              type="text"
+              required
+              placeholder="Enter your full name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              required
+              placeholder="Enter your email address"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              className={`w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 ${
+                emailStatus.message ? 
+                  emailStatus.available ? 'border-green-500' : 'border-red-500' 
+                  : 'border-gray-300'
+              }`}
+            />
+            {emailStatus.checking ? (
+              <p className="mt-1 text-sm text-gray-500">Checking email availability...</p>
+            ) : emailStatus.message ? (
+              <p className={`mt-1 text-sm ${
+                emailStatus.available ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {emailStatus.message}
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-gray-500">We&apos;ll send a verification email to this address</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input
+              type="password"
+              required
+              placeholder="Create a password (min. 6 characters)"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+            <input
+              type="password"
+              required
+              placeholder="Confirm your password"
+              value={formData.confirmPassword}
+              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-start">
+              <input
+                type="checkbox"
+                id="ageVerification"
+                checked={isOver18}
+                onChange={(e) => setIsOver18(e.target.checked)}
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mt-1"
+                required
+              />
+              <label htmlFor="ageVerification" className="ml-2 block text-sm text-gray-700">
+                I confirm that I am 18 years or older and eligible to vote
+              </label>
+            </div>
+
+            <div className="flex items-start">
+              <input
+                type="checkbox"
+                id="consentCheckbox"
+                checked={consentToTerms}
+                onChange={(e) => setConsentToTerms(e.target.checked)}
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mt-1"
+                required
+              />
+              <label htmlFor="consentCheckbox" className="ml-2 block text-sm text-gray-700">
+                I consent to the terms and conditions, including the processing of my data for the purpose of this voting system. I understand that my vote will be recorded on the blockchain.
+              </label>
+            </div>
+          </div>
+
+          <div className="flex justify-center">
+            <ReCAPTCHA
+              sitekey="6LcXnSMrAAAAALl_femTwBqY_ZHQbk3xI4I6hKPY"
+              onChange={(value) => setRecaptchaValue(value)}
+            />
+          </div>
+
           <button 
-            type="button" 
-            onClick={generateCaptcha}
-            className="text-blue-600 text-sm mt-1"
+            type="submit"
+            disabled={loading}
+            className="w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            New captcha
+            {loading ? "Registering..." : "Create Account"}
           </button>
-        </div>
 
-        {/* Age Verification part where the user has to confirm they are over 18 */}
-        <div className="mt-4 flex items-center">
-          <input
-            type="checkbox"
-            id="ageVerification"
-            checked={isOver18}
-            onChange={(e) => setIsOver18(e.target.checked)}
-            className="mr-2"
-            required
-          />
-          <label htmlFor="ageVerification" className="text-sm">
-            I confirm that I am 18 years or older and eligible to vote
-          </label>
-        </div>
-
-        {/* Consent Checkbox part where the user has to confirm they understand the terms and conditions */}
-        <div className="mt-2 flex items-center">
-          <input
-            type="checkbox"
-            id="consentCheckbox"
-            checked={consentToTerms}
-            onChange={(e) => setConsentToTerms(e.target.checked)}
-            className="mr-2"
-            required
-          />
-          <label htmlFor="consentCheckbox" className="text-sm">
-            I consent to the terms and conditions, including the processing of my data for the purpose of this voting system. I understand that my vote will be recorded on the blockchain.
-          </label>
-        </div>
-        
-        <button 
-          className="button mt-6" 
-          type="submit"
-          disabled={loading}
-        >
-          {loading ? "Registering..." : "Register"}
-        </button>
-      </form>
-      <img src={bg} alt="background" className="w-1/2" />
+          <p className="text-center text-sm text-gray-600">
+            Already have an account?{" "}
+            <button
+              type="button"
+              onClick={() => navigate("/login")}
+              className="font-medium text-indigo-600 hover:text-indigo-500"
+            >
+              Sign in
+            </button>
+          </p>
+        </form>
+      </div>
     </div>
   );
 }
